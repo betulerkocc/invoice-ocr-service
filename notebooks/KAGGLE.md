@@ -74,12 +74,113 @@ basılıyor.
 
 ---
 
+# Servisi dışarıya açma (ngrok)
+
+Buraya kadar olan hücreler LLM'i script olarak deniyordu. Şimdi **gerçek bir
+fatura fotoğrafını Postman'den gönderip** uçtan uca sonucu göreceğiz.
+
+## Ön hazırlık — ngrok token'ı (bir kere yapılır)
+
+1. [ngrok.com](https://ngrok.com) → ücretsiz üye ol
+2. [Authtoken sayfasından](https://dashboard.ngrok.com/get-started/your-authtoken) token'ı kopyala
+3. Kaggle notebook'ta **Add-ons → Secrets → Add a new secret**
+   - Label: `NGROK_AUTHTOKEN`
+   - Value: kopyaladığın token
+4. Secret'ın yanındaki kutuyu işaretleyip notebook'a **attach** et
+
+> Token'ı asla hücreye yazma. Notebook'u paylaşırsan token da gider ve
+> o token'la senin ngrok hesabın adına tünel açılabilir.
+
+## Hücre 5 — Servis bağımlılıkları
+
+```python
+!pip install -q pyngrok "paddlepaddle==3.1.1" paddleocr
+```
+
+Bu kurulum **birkaç dakika sürer** — paddle büyük bir paket. Önceki hücrelerde
+gerekmiyordu çünkü sadece LLM'i deniyorduk; şimdi görsel işleyeceğimiz için OCR
+katmanı da lazım.
+
+> CPU sürümü kuruyoruz. OCR görsel başına ~5-7 sn sürecek. GPU sürümü
+> (`paddlepaddle-gpu`) daha hızlı ama CUDA sürüm uyumu zahmetli ve darboğaz
+> zaten OCR değil.
+
+## Hücre 6 — Servisi başlat
+
+```python
+!python scripts/serve_kaggle.py
+```
+
+Bu hücre **bilerek durmaz** — çalıştığı sürece servis ayakta. Çıktıda şuna benzer
+bir kutu göreceksin:
+
+```
+==============================================================
+  PUBLIC URL : https://xxxx-yy-zz.ngrok-free.app
+  Swagger    : https://xxxx-yy-zz.ngrok-free.app/docs
+  Endpoint   : POST https://xxxx-yy-zz.ngrok-free.app/analyze-invoice
+==============================================================
+```
+
+URL göründükten sonra modeller yüklenmeye devam eder. `[OCR] hazir` ve
+`[LLM] hazir` satırlarını görmeden istek atma — servis o ana kadar cevap vermez.
+
+Servisi kapatmak için hücreyi durdur (⏹).
+
+## Hücre 7 — Postman'den test
+
+Postman'de yeni bir istek:
+
+| Alan | Değer |
+|---|---|
+| Method | `POST` |
+| URL | `https://xxxx.ngrok-free.app/analyze-invoice` |
+| Body | **form-data** |
+| Key | `file` — tipini **File** olarak değiştir (Key kutusunun sağındaki açılır menü) |
+| Value | Fatura/fiş fotoğrafını seç |
+
+> **Key tipini File yapmayı unutma.** Varsayılan `Text`'tir; öyle bırakırsan
+> dosya değil dosya adı gider ve `422 Unprocessable Entity` alırsın.
+
+Tarayıcıdan `/docs` adresine girersen ngrok araya bir uyarı sayfası koyar;
+**Visit Site** deyip geçebilirsin. Postman'de bu sorun çıkmaz.
+
+### Cevapta neye bakacaksın
+
+```json
+{
+  "data":     { "company_name": "...", "total_amount": "..." },
+  "raw_text": "OCR'ın okuduğu ham metin",
+  "meta":     { "ocr_seconds": 6.5, "llm_seconds": 1.2 }
+}
+```
+
+`data` yanlışsa **önce `raw_text`'e bak** — sorunun kaynağını ayırt etmenin tek
+yolu bu:
+
+- **`raw_text` de bozuksa** → OCR problemi. Fotoğraf eğik, karanlık ya da
+  düşük çözünürlüklü olabilir. Fine-tune bunu düzeltmez.
+- **`raw_text` doğru ama `data` yanlışsa** → LLM problemi. Fine-tune'un
+  çözeceği şey tam olarak bu.
+
+Bu ayrımı yapmadan fine-tune'a geçmek, yanlış sorunu çözmeye çalışmak olur.
+
+---
+
 ## Fine-tune sonrası
 
 Adaptörü eğittikten sonra aynı testi adaptörle çalıştır ve farkı karşılaştır:
 
 ```python
 !python scripts/smoke_test_llm.py --adapter models/qwen-invoice-lora
+```
+
+Servisi adaptörle çalıştırmak için `ADAPTER_PATH` ortam değişkenini ver:
+
+```python
+import os
+os.environ['ADAPTER_PATH'] = 'models/qwen-invoice-lora'
+!ADAPTER_PATH=models/qwen-invoice-lora python scripts/serve_kaggle.py
 ```
 
 ## Repo private ise

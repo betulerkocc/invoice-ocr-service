@@ -138,6 +138,11 @@ repo'yu klonlayıp çalıştırır. Servisi dışarıya (Postman / Flutter) açm
 - [x] FastAPI iskeleti (`/analyze-invoice` ham metin döndürüyor)
 - [x] LLM inference katmanı (base model) — ölçüm: [docs/baseline-base-model.md](docs/baseline-base-model.md)
 - [x] API'ye LLM entegrasyonu
+- [x] ngrok ile servisi dışarıya açma — bkz. [notebooks/KAGGLE.md](notebooks/KAGGLE.md)
 - [ ] SROIE v2 veri hazırlama
 - [ ] QLoRA fine-tune
-- [ ] Fine-tuned adaptör + ngrok ile servis
+- [ ] Fine-tuned adaptörü servise takma
+
+> ngrok adımı bilerek fine-tune'dan **önce** yapıldı: gerçek bir fatura
+> fotoğrafında OCR çıktısının ne kadar dağınık geldiğini görmeden fine-tune
+> verisinin nasıl hazırlanacağına karar vermek doğru olmaz.
