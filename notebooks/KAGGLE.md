@@ -209,6 +209,78 @@ Bu ayrımı yapmadan fine-tune'a geçmek, yanlış sorunu çözmeye çalışmak 
 
 ---
 
+# Fine-tune (QLoRA)
+
+## Hücre 9 — Veri setini bağla ve hazırla
+
+Sağ panel → **Add Input** → `SROIE` ara → **SROIE datasetv2**'yi ekle.
+(İndirme değil, bağlama — saniyeler sürer.)
+
+```python
+!python llm/finetune/prepare_sroie.py
+```
+
+Beklenen: `train: 626 ornek`, `test: 347 ornek`. `invoice_no` oranının düşük
+olması (%35-45) normaldir — fişlerin çoğunda fatura numarası gerçekten yok,
+orada `null` doğru etikettir.
+
+## Hücre 10 — Eğitim bağımlılıkları
+
+```python
+!pip install -q -U "peft>=0.13" "bitsandbytes>=0.44" "accelerate>=0.34"
+```
+
+## Hücre 11 — Duman testi (önce bunu çalıştır)
+
+```python
+!python llm/finetune/train.py --limit 20 --epochs 1
+```
+
+20 örnekle 2-3 dakikada biter. Amaç doğruluk değil, **boru hattının aktığını
+görmek**: model 4-bit yükleniyor mu, LoRA takılıyor mu, kayıp (loss) düşüyor mu,
+adaptör kaydediliyor mu. Buradaki bir hatayı 40 dakikalık eğitimin sonunda
+keşfetmek istemezsin.
+
+Çıktıda şunu görmelisin:
+
+```
+trainable params: 8,798,208 || all params: ... || trainable%: 1.7...
+Egitim ornegi: 20
+{'loss': ..., 'grad_norm': ..., 'learning_rate': ...}
+Adaptor kaydedildi: models/qwen-invoice-lora
+```
+
+`trainable%` küçük bir sayı olmalı (%1-3). Büyükse LoRA takılmamış, tüm model
+eğitiliyor demektir.
+
+## Hücre 12 — Gerçek eğitim
+
+```python
+!python llm/finetune/train.py
+```
+
+626 örnek × 3 epoch, T4'te tahminen **30-50 dakika**. Kayıp değeri baştaki
+2-3 seviyesinden 0.1-0.5 aralığına inmeli.
+
+> Kaggle oturumu ~9-12 saatte kapanır ve `/kaggle/working` dışındaki her şey
+> silinir. Adaptör oraya kaydediliyor (`models/qwen-invoice-lora`), yani oturum
+> boyunca güvende. Kalıcı saklamak istersen notebook çıktısı olarak indir.
+
+## Hücre 13 — Öncesi/sonrası karşılaştırma
+
+```python
+!python scripts/smoke_test_llm.py --adapter models/qwen-invoice-lora
+```
+
+Sonucu [docs/baseline-base-model.md](../docs/baseline-base-model.md) ile
+karşılaştır. Beklenen düzelmeler:
+
+- `company_name` artık boş dönmemeli
+- Eksik alanlarda `""` yerine `null` gelmeli
+- Adres özetlenmek yerine metinden birebir kopyalanmalı
+
+---
+
 ## Fine-tune sonrası
 
 Adaptörü eğittikten sonra aynı testi adaptörle çalıştır ve farkı karşılaştır:

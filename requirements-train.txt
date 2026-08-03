@@ -2,6 +2,12 @@
 # Yerel makinede kurmaya gerek yok: bitsandbytes GPU ister.
 -r requirements.txt
 
-trl>=0.11
-datasets>=3.0
 bitsandbytes>=0.44
+
+# trl kullanmiyoruz. SFTTrainer'in API'si surumler arasinda cok degisti
+# (SFTConfig zorunlulugu, tokenizer -> processing_class, dataset_text_field
+# anlaminin kaymasi) ve Kaggle her calistirmada guncel surumu kuruyor.
+# Onun yerine transformers.Trainer + elle etiket maskeleme kullaniyoruz:
+# llm/finetune/train.py. QLoRA'nin ozu (4-bit NF4 + LoRA) degismedi.
+#
+# datasets de gerekmiyor: JSONL'i dogrudan torch Dataset ile okuyoruz.
