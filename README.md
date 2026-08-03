@@ -87,9 +87,43 @@ uvicorn api.main:app --reload
 
 `http://127.0.0.1:8000/docs` adresinden Swagger arayüzü ile test edilebilir.
 
+Ayarlar için `.env.example` dosyasını `.env` olarak kopyalayın.
+
 ### Endpoint
 
 `POST /analyze-invoice` — `multipart/form-data` ile `file` alanında görsel alır.
+
+```json
+{
+  "filename": "fis.png",
+  "data": { "company_name": "...", "date": "...", "address": "...",
+            "total_amount": "...", "invoice_no": "..." },
+  "raw_text": "OCR'ın okuduğu ham metin",
+  "meta": { "llm_used": true, "llm_error": null,
+            "ocr_seconds": 6.58, "llm_seconds": 1.2 }
+}
+```
+
+`raw_text` bilerek cevapta tutuluyor: sonuç yanlış geldiğinde hatanın OCR'da mı
+(metni yanlış okudu) yoksa LLM'de mi (metni yanlış anladı) olduğunu ayırt etmenin
+tek yolu bu.
+
+`GET /` — sağlık kontrolü. OCR ve LLM'in yüklenip yüklenmediğini, yüklenmediyse
+sebebini döner.
+
+### LLM olmadan çalışma
+
+torch kurulu değilse ya da `ENABLE_LLM=0` ise servis **çökmez**: OCR ile çalışmaya
+devam eder, `data` alanını boş döndürüp `meta.llm_error` içinde sebebini bildirir.
+Böylece LLM bağımlılıkları olmayan bir makinede de OCR katmanı test edilebilir.
+
+### Windows'ta ASCII dışı kullanıcı adı
+
+Kullanıcı adınız `ü`, `ş` gibi karakter içeriyorsa PaddlePaddle model
+dosyalarını açamaz ve yanıltıcı bir `Cannot open file ... inference.json`
+hatası verir (dosya aslında yerindedir, sorun yolun okunamamasıdır).
+`ocr/ocr_engine.py` bunu otomatik algılayıp model cache'ini `C:\paddlex_cache`
+dizinine alır; ek bir şey yapmanız gerekmez.
 
 ## Çalışma ortamı
 
@@ -102,8 +136,8 @@ repo'yu klonlayıp çalıştırır. Servisi dışarıya (Postman / Flutter) açm
 
 - [x] OCR katmanı
 - [x] FastAPI iskeleti (`/analyze-invoice` ham metin döndürüyor)
-- [x] LLM inference katmanı (base model)
-- [ ] API'ye LLM entegrasyonu
+- [x] LLM inference katmanı (base model) — ölçüm: [docs/baseline-base-model.md](docs/baseline-base-model.md)
+- [x] API'ye LLM entegrasyonu
 - [ ] SROIE v2 veri hazırlama
 - [ ] QLoRA fine-tune
 - [ ] Fine-tuned adaptör + ngrok ile servis

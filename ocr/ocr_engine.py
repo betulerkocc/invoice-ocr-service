@@ -3,7 +3,41 @@ OCR Engine - PaddleOCR wrapper
 Gorseldeki metni satir satir okur ve ham metin olarak döndürür.
 """
 
-from paddleocr import PaddleOCR
+import os
+
+_ASCII_OLMAYAN_YEDEK_CACHE = r"C:\paddlex_cache"
+
+
+def _ascii_cache_dizini_ayarla():
+    """
+    Windows'ta kullanici adi ASCII disi karakter iceriyorsa (ornek: 'Betül'),
+    PaddlePaddle'in C++ katmani model dosyalarini acamaz ve su hatayi verir:
+
+        RuntimeError: (NotFound) Cannot open file ...\\inference.json
+
+    Hata "dosya yok" der ama dosya yerindedir; sorun yolun okunamamasidir.
+    Cozum: model cache'ini ASCII bir dizine tasimak.
+
+    Bu fonksiyon paddleocr import edilmeden ONCE calismak zorunda - paddlex
+    cache yolunu import aninda bir kere okuyup sabitliyor.
+    """
+    if os.name != "nt" or "PADDLE_PDX_CACHE_HOME" in os.environ:
+        return  # Windows degil ya da kullanici zaten kendi yolunu vermis
+
+    varsayilan = os.path.join(os.path.expanduser("~"), ".paddlex")
+    try:
+        varsayilan.encode("ascii")
+    except UnicodeEncodeError:
+        os.environ["PADDLE_PDX_CACHE_HOME"] = _ASCII_OLMAYAN_YEDEK_CACHE
+        print(
+            f"[OCR] Ev dizini ASCII disi karakter iceriyor. "
+            f"Model cache'i {_ASCII_OLMAYAN_YEDEK_CACHE} dizinine alindi."
+        )
+
+
+_ascii_cache_dizini_ayarla()
+
+from paddleocr import PaddleOCR  # noqa: E402
 
 
 class OCREngine:
