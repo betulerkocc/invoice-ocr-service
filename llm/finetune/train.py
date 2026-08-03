@@ -77,15 +77,32 @@ class FaturaVeriSeti(Dataset):
 
         # Bos metinle sablonun kendi maliyeti (sistem prompt'u + chat isaretleri).
         # Ham metne ne kadar yer kaldigini buradan hesapliyoruz.
-        self._sablon_maliyeti = len(
-            tokenizer.apply_chat_template(
-                build_messages(""), tokenize=True, add_generation_prompt=True
-            )
-        )
+        self._sablon_maliyeti = len(self._prompt_tokenlari(""))
         self.kirpilan = 0  # kac ornekte ham metin kisaltildi
 
     def __len__(self):
         return len(self.ornekler)
+
+    def _prompt_tokenlari(self, raw_text: str) -> list:
+        """
+        Chat sablonunu uygulayip DUZ token listesi dondurur.
+
+        apply_chat_template surume gore farkli sey donduruyor: kimi surumde
+        dogrudan [int, ...], kimi surumde BatchEncoding, kimi surumde de
+        batch boyutuyla [[int, ...]]. Hepsini burada tek bicime indiriyoruz.
+
+        Onemli: BatchEncoding uzerinde len() token sayisini degil ANAHTAR
+        sayisini verir. Duzeltmeden birakilirsa kirpma hesabi sessizce
+        yanlis calisir - hata vermez, sadece yanlis egitir.
+        """
+        cikti = self.tokenizer.apply_chat_template(
+            build_messages(raw_text), tokenize=True, add_generation_prompt=True
+        )
+        if not isinstance(cikti, list):     # BatchEncoding / dict benzeri
+            cikti = cikti["input_ids"]
+        if cikti and isinstance(cikti[0], list):  # [[...]] -> [...]
+            cikti = cikti[0]
+        return list(cikti)
 
     def __getitem__(self, i):
         ornek = self.ornekler[i]
@@ -103,11 +120,7 @@ class FaturaVeriSeti(Dataset):
         raw_text = self._kirp(ornek["raw_text"], max(izin, 0))
 
         # Prompt: inference'taki ile BIREBIR ayni olmali (llm/prompt.py)
-        prompt_ids = self.tokenizer.apply_chat_template(
-            build_messages(raw_text),
-            tokenize=True,
-            add_generation_prompt=True,
-        )
+        prompt_ids = self._prompt_tokenlari(raw_text)
 
         # Son emniyet kemeri: yukaridaki hesap tutmadiysa bile cevap hep tam kalir
         azami_prompt = self.max_length - len(cevap_ids)
