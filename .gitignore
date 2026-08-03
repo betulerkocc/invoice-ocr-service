@@ -20,6 +20,8 @@ models/
 data/raw/
 data/processed/
 data/sroie/
+# prepare_sroie.py'nin ürettiği eğitim dosyaları — veriden yeniden üretilebilir
+data/*.jsonl
 
 # IDE
 .vscode/
