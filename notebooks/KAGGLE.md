@@ -11,10 +11,18 @@ Notebook açtıktan sonra sağ paneldeki **Settings** bölümünden:
 | Ayar | Değer |
 |---|---|
 | Accelerator | **GPU T4 x2** (ya da P100) |
+
 | Internet | **On** (model indirmek ve repo klonlamak için şart) |
 | Persistence | Variables and Files |
 
 > Internet kapalıysa `git clone` ve HuggingFace model indirme çalışmaz.
+
+> **T4 x2 seçebilirsin ama eğitim tek kart kullanır.** `bitsandbytes`'ın 4-bit
+> katmanları PyTorch'un `DataParallel`'i ile çalışmıyor; iki kart görünürse
+> eğitim `CUDA error: an illegal memory access was encountered` ile çöker.
+> `train.py` bu yüzden kendini tek karta sabitliyor. 0.5B'lik model tek T4'e
+> rahat sığdığı için kayıp yok — ikinci kart bu boyutta zaten hız
+> kazandırmazdı.
 
 ---
 

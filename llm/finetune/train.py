@@ -27,7 +27,22 @@ import json
 import os
 import sys
 
-import torch
+# --- torch import edilmeden ONCE calismali ---
+#
+# bitsandbytes'in 4-bit katmanlari torch'un DataParallel'i ile calismiyor.
+# Kaggle'da "GPU T4 x2" secilirse Trainer modeli iki karta kopyalar; 4-bit
+# agirliklari acmak icin gereken quantization durumu ikinci karta dogru
+# tasinmadigi icin egitim su hatayla cokuyor:
+#
+#     CUDA error: an illegal memory access was encountered
+#
+# 0.5B'lik model tek T4'e rahatca sigdigi icin tek karta sabitliyoruz.
+# Ikinci kart zaten hiz kazandirmazdi: DataParallel her adimda modeli
+# kopyalayip gradyanlari toplar, bu boyutta faydadan cok yuk getirir.
+# Gerekirse disaridan CUDA_VISIBLE_DEVICES verilerek degistirilebilir.
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+
+import torch  # noqa: E402
 from torch.utils.data import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -186,6 +201,10 @@ def main():
         )
     if not torch.cuda.is_available():
         sys.exit("HATA: GPU bulunamadi. Bu script Kaggle T4 (ya da baska CUDA GPU) ister.")
+
+    # Gorunur kart sayisi 1 olmali; 2 ise DataParallel devreye girer ve
+    # 4-bit egitim cokerdi (yukaridaki CUDA_VISIBLE_DEVICES notuna bakin).
+    print(f"GPU: {torch.cuda.get_device_name(0)} | gorunur kart: {torch.cuda.device_count()}")
 
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
