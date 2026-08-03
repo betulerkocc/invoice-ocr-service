@@ -32,6 +32,7 @@ Accelerator ayarı GPU'ya geçmemiş demektir.
 ```python
 import os, shutil
 os.environ['GIT_TERMINAL_PROMPT'] = '0'   # şifre sorup kilitlenmesin, hata versin
+%cd /kaggle/working
 if os.path.exists('/kaggle/working/invoice-ocr-service'):
     shutil.rmtree('/kaggle/working/invoice-ocr-service')  # eski kopyayı temizle
 !git clone https://github.com/KULLANICI_ADIN/invoice-ocr-service.git /kaggle/working/invoice-ocr-service
@@ -39,6 +40,21 @@ if os.path.exists('/kaggle/working/invoice-ocr-service'):
 ```
 
 `KULLANICI_ADIN` yerine kendi GitHub kullanıcı adını yaz.
+
+> **Baştaki `%cd /kaggle/working` neden var?** Hücrenin sonundaki `%cd` seni
+> repo klasörünün içine sokuyor. Hücreyi ikinci kez çalıştırdığında `rmtree`
+> tam da içinde durduğun klasörü siler — altındaki zemin çekilir. Klasör
+> yeniden oluşsa bile notebook silinmiş dizini "bulunduğum yer" sanmaya devam
+> eder ve her komut şu hatayı verir:
+>
+> ```
+> shell-init: error retrieving current directory: getcwd: ...
+> python3: can't open file 'scripts/xxx.py': [Errno 2] No such file or directory
+> ```
+>
+> Baştaki `%cd` silinecek klasörün dışına çıkmayı garantiler.
+> Bu hatayı yine de alırsan: bir hücrede `%cd /kaggle/working` çalıştır,
+> sonra bu hücreyi tekrar çalıştır.
 
 > **`GIT_TERMINAL_PROMPT=0` neden var?** Repo private ya da adres yanlışsa git
 > `Username for 'https://github.com':` diye sorar. Notebook hücresine klavyeden
