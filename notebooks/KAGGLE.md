@@ -31,6 +31,7 @@ Accelerator ayarı GPU'ya geçmemiş demektir.
 
 ```python
 import os, shutil
+os.environ['GIT_TERMINAL_PROMPT'] = '0'   # şifre sorup kilitlenmesin, hata versin
 if os.path.exists('/kaggle/working/invoice-ocr-service'):
     shutil.rmtree('/kaggle/working/invoice-ocr-service')  # eski kopyayı temizle
 !git clone https://github.com/KULLANICI_ADIN/invoice-ocr-service.git /kaggle/working/invoice-ocr-service
@@ -38,6 +39,12 @@ if os.path.exists('/kaggle/working/invoice-ocr-service'):
 ```
 
 `KULLANICI_ADIN` yerine kendi GitHub kullanıcı adını yaz.
+
+> **`GIT_TERMINAL_PROMPT=0` neden var?** Repo private ya da adres yanlışsa git
+> `Username for 'https://github.com':` diye sorar. Notebook hücresine klavyeden
+> cevap yazamazsın, hücre sonsuza kadar asılı kalır. Bu satır git'e "soru sorma,
+> direkt hata ver" der — böylece saniyeler içinde `Authentication failed` görüp
+> sorunu anlarsın.
 
 > Kodu her değiştirdiğinde: VS Code'da commit + push → bu hücreyi tekrar çalıştır.
 > Hücre eski klasörü sildiği için her seferinde temiz kopya gelir.
