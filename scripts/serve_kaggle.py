@@ -28,25 +28,39 @@ sys.path.insert(0, os.path.join(_BASE_DIR, "..", "api"))
 
 def _authtoken_bul() -> str:
     """Token'i once Kaggle Secrets'ta, sonra ortam degiskenlerinde arar."""
-    try:
-        from kaggle_secrets import UserSecretsClient
-
-        token = UserSecretsClient().get_secret("NGROK_AUTHTOKEN")
-        if token:
-            print("[ngrok] token Kaggle Secrets'tan alindi")
-            return token.strip()
-    except Exception:
-        pass  # Kaggle disindayiz ya da secret tanimli degil -> ortam degiskenine bak
-
+    # Once ortam degiskeni: notebook'ta elle set edildiyse en guvenilir yol.
     token = os.getenv("NGROK_AUTHTOKEN", "").strip()
     if token:
         print("[ngrok] token ortam degiskeninden alindi")
         return token
 
+    try:
+        from kaggle_secrets import UserSecretsClient
+
+        token = (UserSecretsClient().get_secret("NGROK_AUTHTOKEN") or "").strip()
+        if token:
+            print("[ngrok] token Kaggle Secrets'tan alindi")
+            return token
+        neden = "secret bos dondu"
+    except ImportError:
+        neden = "kaggle_secrets modulu yok (Kaggle disindayiz)"
+    except Exception as e:
+        # Sebebi bastirmiyoruz: 'secret yok' ile 'secret attach edilmemis'
+        # ayrimini yapabilmek icin gercek hata mesaji lazim.
+        neden = f"{type(e).__name__}: {e}"
+
     sys.exit(
-        "HATA: ngrok authtoken bulunamadi.\n"
-        "  Kaggle'da: Add-ons -> Secrets -> 'NGROK_AUTHTOKEN' adiyla ekleyin,\n"
-        "  ardindan notebook'ta secret'i bu script icin gorunur kilin.\n"
+        f"HATA: ngrok authtoken bulunamadi. (Kaggle Secrets denemesi -> {neden})\n"
+        "\n"
+        "  Cozum 1 (onerilen) - notebook hucresinde token'i ortam degiskenine koyun:\n"
+        "      import os\n"
+        "      from kaggle_secrets import UserSecretsClient\n"
+        "      os.environ['NGROK_AUTHTOKEN'] = UserSecretsClient().get_secret('NGROK_AUTHTOKEN')\n"
+        "\n"
+        "  Cozum 2 - Secret'i kontrol edin:\n"
+        "      Add-ons -> Secrets -> label tam olarak 'NGROK_AUTHTOKEN' olmali\n"
+        "      Eklemek yetmez, yanindaki kutuyu isaretleyip notebook'a attach edin\n"
+        "\n"
         "  Token: https://dashboard.ngrok.com/get-started/your-authtoken"
     )
 

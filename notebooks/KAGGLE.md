@@ -121,7 +121,27 @@ katmanı da lazım.
 > (`paddlepaddle-gpu`) daha hızlı ama CUDA sürüm uyumu zahmetli ve darboğaz
 > zaten OCR değil.
 
-## Hücre 6 — Servisi başlat
+## Hücre 6 — Token'ı ortam değişkenine koy
+
+```python
+import os
+from kaggle_secrets import UserSecretsClient
+os.environ['NGROK_AUTHTOKEN'] = UserSecretsClient().get_secret('NGROK_AUTHTOKEN')
+print("token okundu:", os.environ['NGROK_AUTHTOKEN'][:6] + "...")
+```
+
+Script Secret'ı kendisi de okumayı dener, ama `!python ...` ayrı bir süreç
+başlatır ve Secret erişimi bazen o sürece taşınmaz. Bu hücre token'ı ortam
+değişkenine yazar; ortam değişkenleri alt süreçlere miras kalır, bu yüzden
+her koşulda çalışır.
+
+Hata alırsan Secret ya eklenmemiş ya notebook'a attach edilmemiş demektir —
+**Add-ons → Secrets**, label tam olarak `NGROK_AUTHTOKEN`, yanındaki kutu işaretli.
+
+> Token'ın tamamını asla `print` etme. Yukarıdaki hücre bilerek sadece ilk
+> 6 karakteri basıyor — okundu mu diye kontrol etmeye yetiyor.
+
+## Hücre 7 — Servisi başlat
 
 ```python
 !python scripts/serve_kaggle.py
@@ -143,7 +163,7 @@ URL göründükten sonra modeller yüklenmeye devam eder. `[OCR] hazir` ve
 
 Servisi kapatmak için hücreyi durdur (⏹).
 
-## Hücre 7 — Postman'den test
+## Hücre 8 — Postman'den test
 
 Postman'de yeni bir istek:
 
