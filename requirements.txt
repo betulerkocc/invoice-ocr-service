@@ -1,0 +1,20 @@
+# --- API katmani ---
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+pydantic==2.9.2
+python-dotenv==1.0.1
+requests==2.32.3
+
+# --- OCR katmani ---
+paddlepaddle==3.1.1
+paddleocr
+pillow==10.4.0
+
+# --- LLM katmani (inference) ---
+# torch surumu sabitlenmiyor: Kaggle'da hazir kurulu geliyor, yeniden
+# indirmesini istemiyoruz. Yerelde CPU wheel'i yeterli (Qwen 0.5B ~1 GB).
+torch>=2.4
+transformers>=4.45
+accelerate>=0.34
+peft>=0.13

@@ -1,0 +1,7 @@
+# Sadece fine-tune icin gerekli ek paketler (Kaggle T4 notebook'unda kurulur).
+# Yerel makinede kurmaya gerek yok: bitsandbytes GPU ister.
+-r requirements.txt
+
+trl>=0.11
+datasets>=3.0
+bitsandbytes>=0.44

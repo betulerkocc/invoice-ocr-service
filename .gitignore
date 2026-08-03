@@ -1,0 +1,36 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.Python
+
+# Ortam değişkenleri (API anahtarları, ngrok token vs.)
+.env
+
+# Model ağırlıkları (büyük dosyalar, git'e uygun değil)
+models/
+*.safetensors
+*.bin
+*.pt
+*.gguf
+
+# Veri seti (SROIE v2 gibi büyük veriler)
+data/raw/
+data/processed/
+data/sroie/
+
+# IDE
+.vscode/
+.idea/
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Loglar
+*.log
