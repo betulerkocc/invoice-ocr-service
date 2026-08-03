@@ -152,11 +152,17 @@ bir kutu göreceksin:
 
 ```
 ==============================================================
-  PUBLIC URL : https://xxxx-yy-zz.ngrok-free.app
-  Swagger    : https://xxxx-yy-zz.ngrok-free.app/docs
-  Endpoint   : POST https://xxxx-yy-zz.ngrok-free.app/analyze-invoice
+  PUBLIC URL : https://1a2b-34-56-78-90.ngrok-free.app
+  Swagger    : https://1a2b-34-56-78-90.ngrok-free.app/docs
+  Endpoint   : POST https://1a2b-34-56-78-90.ngrok-free.app/analyze-invoice
 ==============================================================
 ```
+
+> **Yukarıdaki adres bir örnek, gerçek değil.** Kendi çıktındaki `PUBLIC URL`
+> satırını kopyalaman gerekiyor — her başlatmada farklı bir adres üretilir.
+> Örnekteki adresi olduğu gibi kullanırsan ngrok'tan HTML bir hata sayfası
+> dönersin: `The endpoint ... is offline. (ERR_NGROK_3200)`. Bu hata "servis
+> çalışmıyor" değil, "böyle bir adres yok" demektir.
 
 URL göründükten sonra modeller yüklenmeye devam eder. `[OCR] hazir` ve
 `[LLM] hazir` satırlarını görmeden istek atma — servis o ana kadar cevap vermez.
@@ -170,7 +176,7 @@ Postman'de yeni bir istek:
 | Alan | Değer |
 |---|---|
 | Method | `POST` |
-| URL | `https://xxxx.ngrok-free.app/analyze-invoice` |
+| URL | Hücre 7 çıktısındaki `PUBLIC URL` + `/analyze-invoice` |
 | Body | **form-data** |
 | Key | `file` — tipini **File** olarak değiştir (Key kutusunun sağındaki açılır menü) |
 | Value | Fatura/fiş fotoğrafını seç |
