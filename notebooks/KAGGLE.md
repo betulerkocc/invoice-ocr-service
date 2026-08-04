@@ -295,6 +295,22 @@ eğitiliyor demektir.
 347 test örneğinde base model ile fine-tune edilmiş modeli art arda çalıştırıp
 alan alan doğruluk tablosu basar. **Staj raporunun en değerli çıktısı bu.**
 
+> **Önce `torchao`'yu kaldır**, yoksa adaptör yüklenirken şu hatayı alırsın:
+> `ImportError: Found an incompatible version of torchao`
+>
+> ```python
+> !python -m pip uninstall -y torchao
+> ```
+>
+> Kaggle imajındaki `torchao` sürümü `peft`'in beklediğinden eski. `peft`
+> uyumsuz sürümü görünce o dispatcher'ı atlamak yerine hata fırlatıyor.
+> torchao'yu kullanmıyoruz; paket hiç yoksa `peft` sessizce geçiyor.
+> Yükseltmek yerine kaldırmak daha güvenli — torchao sürümleri torch
+> sürümüne bağlı.
+>
+> Eğitimde bu hata çıkmaz: orada model 4-bit yüklendiği için `bitsandbytes`
+> dispatcher'ı önce eşleşir ve torchao'ya sıra gelmez.
+
 İki model × 347 örnek olduğu için **15-35 dakika** sürer. Hızlı bakmak
 istersen `--limit 50` ekle.
 
