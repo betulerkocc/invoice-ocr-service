@@ -139,8 +139,10 @@ repo'yu klonlayıp çalıştırır. Servisi dışarıya (Postman / Flutter) açm
 - [x] LLM inference katmanı (base model) — ölçüm: [docs/baseline-base-model.md](docs/baseline-base-model.md)
 - [x] API'ye LLM entegrasyonu
 - [x] ngrok ile servisi dışarıya açma — bkz. [notebooks/KAGGLE.md](notebooks/KAGGLE.md)
-- [ ] SROIE v2 veri hazırlama
-- [ ] QLoRA fine-tune
+- [x] SROIE v2 veri hazırlama (`llm/finetune/prepare_sroie.py`) — 626 + 347 örnek
+- [x] QLoRA fine-tune scripti (`llm/finetune/train.py`)
+- [x] Değerlendirme scripti (`scripts/evaluate.py`)
+- [ ] Eğitimi çalıştır ve öncesi/sonrası tabloyu al
 - [ ] Fine-tuned adaptörü servise takma
 
 > ngrok adımı bilerek fine-tune'dan **önce** yapıldı: gerçek bir fatura

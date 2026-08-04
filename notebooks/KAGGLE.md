@@ -274,7 +274,39 @@ eğitiliyor demektir.
 > silinir. Adaptör oraya kaydediliyor (`models/qwen-invoice-lora`), yani oturum
 > boyunca güvende. Kalıcı saklamak istersen notebook çıktısı olarak indir.
 
-## Hücre 13 — Öncesi/sonrası karşılaştırma
+## Hücre 13 — Sayısal değerlendirme (asıl sonuç)
+
+```python
+!python scripts/evaluate.py --compare models/qwen-invoice-lora
+```
+
+347 test örneğinde base model ile fine-tune edilmiş modeli art arda çalıştırıp
+alan alan doğruluk tablosu basar. **Staj raporunun en değerli çıktısı bu.**
+
+İki model × 347 örnek olduğu için **15-35 dakika** sürer. Hızlı bakmak
+istersen `--limit 50` ekle.
+
+```
+  ALAN               BASE   FINE-TUNE      FARK
+  --------------------------------------------
+  company_name      12.4%       78.1%     +65.7
+  ...
+  --------------------------------------------
+  ORTALAMA          31.2%       74.5%     +43.3
+  TAM ESLESME        2.0%       41.2%     +39.2
+```
+
+> Karşılaştırma **eğitimde hiç görülmemiş** 347 örnek üzerinde yapılıyor.
+> Eğitim verisinde ölçseydik model ezberlediğini geri söyler, hiçbir şey
+> öğrenmiş olmazdık.
+
+Sonucu dosyaya kaydetmek için:
+
+```python
+!python scripts/evaluate.py --compare models/qwen-invoice-lora --out docs/sonuclar.json
+```
+
+## Hücre 14 — Gözle kontrol
 
 ```python
 !python scripts/smoke_test_llm.py --adapter models/qwen-invoice-lora
