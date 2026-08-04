@@ -206,6 +206,28 @@ def main():
     # 4-bit egitim cokerdi (yukaridaki CUDA_VISIBLE_DEVICES notuna bakin).
     print(f"GPU: {torch.cuda.get_device_name(0)} | gorunur kart: {torch.cuda.device_count()}")
 
+    # Paketleri model indirilmeden ONCE kontrol et. Aksi halde 1 GB'lik model
+    # inip ondan sonra ImportError aliniyor. Kaggle oturumu kapaninca pip ile
+    # kurulanlar siliniyor, bu yuzden yeni oturumda sik karsilasilan bir hata.
+    eksik = []
+    try:
+        import peft  # noqa: F401
+    except ImportError:
+        eksik.append("peft>=0.13")
+    if not args.no_4bit:
+        try:
+            import bitsandbytes  # noqa: F401
+        except ImportError:
+            eksik.append("bitsandbytes>=0.46.1")
+    if eksik:
+        sys.exit(
+            f"HATA: eksik paket -> {', '.join(eksik)}\n"
+            f'  pip install -q -U "peft>=0.13" "bitsandbytes>=0.46.1" "accelerate>=0.34"\n'
+            "\n"
+            "  Not: Kaggle oturumu kapaninca pip ile kurulan paketler silinir.\n"
+            "  Yeni oturum actiysan kurulum hucresini tekrar calistirin."
+        )
+
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
     print(f"Model yukleniyor: {args.model}")

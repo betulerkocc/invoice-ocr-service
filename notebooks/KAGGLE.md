@@ -11,11 +11,15 @@ Notebook açtıktan sonra sağ paneldeki **Settings** bölümünden:
 | Ayar | Değer |
 |---|---|
 | Accelerator | **GPU T4 x2** (ya da P100) |
-
 | Internet | **On** (model indirmek ve repo klonlamak için şart) |
 | Persistence | Variables and Files |
 
 > Internet kapalıysa `git clone` ve HuggingFace model indirme çalışmaz.
+
+> **Yeni oturum açtıysan `pip install` hücrelerini tekrar çalıştır.** Kaggle
+> oturumu kapanınca pip ile kurulan paketler silinir. Kod ve veri klonlamayla
+> geri gelir, paketler gelmez. Atlarsan `ImportError: Using bitsandbytes 4-bit
+> quantization requires bitsandbytes` gibi hatalar alırsın.
 
 > **T4 x2 seçebilirsin ama eğitim tek kart kullanır.** `bitsandbytes`'ın 4-bit
 > katmanları PyTorch'un `DataParallel`'i ile çalışmıyor; iki kart görünürse
@@ -235,7 +239,7 @@ orada `null` doğru etikettir.
 ## Hücre 10 — Eğitim bağımlılıkları
 
 ```python
-!pip install -q -U "peft>=0.13" "bitsandbytes>=0.44" "accelerate>=0.34"
+!pip install -q -U "peft>=0.13" "bitsandbytes>=0.46.1" "accelerate>=0.34"
 ```
 
 ## Hücre 11 — Duman testi (önce bunu çalıştır)

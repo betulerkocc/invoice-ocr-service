@@ -2,7 +2,7 @@
 # Yerel makinede kurmaya gerek yok: bitsandbytes GPU ister.
 -r requirements.txt
 
-bitsandbytes>=0.44
+bitsandbytes>=0.46.1
 
 # trl kullanmiyoruz. SFTTrainer'in API'si surumler arasinda cok degisti
 # (SFTConfig zorunlulugu, tokenizer -> processing_class, dataset_text_field
