@@ -235,6 +235,17 @@ def on_kontrol(adaptor_yolu: str):
 
 
 def main():
+    # Ciktiyi satir satir akit.
+    #
+    # '!python ...' ile calistirildiginda stdout bir boruya baglanir ve Python
+    # ~8 KB'lik tamponu dolana kadar hicbir sey yazmaz. Bu script yarim saat
+    # calisiyor ama az sey basiyor; tamponlama acikken kullanici 30 dakika
+    # bombos ekrana bakar ve donduguna kanaat getirir.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except AttributeError:
+        pass  # cok eski Python; ilerleme gec gorunur ama calisma etkilenmez
+
     p = argparse.ArgumentParser()
     p.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
     p.add_argument("--test-file", default="data/sroie_test.jsonl")
