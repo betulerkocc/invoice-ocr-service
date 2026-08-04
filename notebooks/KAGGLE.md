@@ -16,10 +16,18 @@ Notebook açtıktan sonra sağ paneldeki **Settings** bölümünden:
 
 > Internet kapalıysa `git clone` ve HuggingFace model indirme çalışmaz.
 
-> **Yeni oturum açtıysan `pip install` hücrelerini tekrar çalıştır.** Kaggle
+> **Yeni oturum açtıysan kurulum hücrelerini tekrar çalıştır.** Kaggle
 > oturumu kapanınca pip ile kurulan paketler silinir. Kod ve veri klonlamayla
 > geri gelir, paketler gelmez. Atlarsan `ImportError: Using bitsandbytes 4-bit
 > quantization requires bitsandbytes` gibi hatalar alırsın.
+
+> **Kurulumlarda `!pip` değil `!python -m pip` kullanılıyor.** `!pip` ile
+> `!python` farklı Python kurulumlarına işaret edebiliyor; o zaman paket
+> kurulmuş görünür ama scriptin çalıştığı yorumlayıcı onu bulamaz ve
+> "paket yok" hatası kurulumdan sonra da devam eder. `python -m pip`
+> paketin doğru yere gitmesini garantiler.
+>
+> `-q` bayrağı da bilerek kaldırıldı: kurulum hatalarını gizliyordu.
 
 > **T4 x2 seçebilirsin ama eğitim tek kart kullanır.** `bitsandbytes`'ın 4-bit
 > katmanları PyTorch'un `DataParallel`'i ile çalışmıyor; iki kart görünürse
@@ -80,7 +88,7 @@ if os.path.exists('/kaggle/working/invoice-ocr-service'):
 ## Hücre 3 — Bağımlılıklar
 
 ```python
-!pip install -q -U "transformers>=4.45" "peft>=0.13" "accelerate>=0.34"
+!python -m pip install -U "transformers>=4.45" "peft>=0.13" "accelerate>=0.34"
 ```
 
 Kaggle'da `torch` zaten kurulu geliyor, ona dokunmuyoruz — yeniden kurmak
@@ -122,7 +130,7 @@ fatura fotoğrafını Postman'den gönderip** uçtan uca sonucu göreceğiz.
 ## Hücre 5 — Servis bağımlılıkları
 
 ```python
-!pip install -q pyngrok "paddlepaddle==3.1.1" paddleocr
+!python -m pip install pyngrok "paddlepaddle==3.1.1" paddleocr
 ```
 
 Bu kurulum **birkaç dakika sürer** — paddle büyük bir paket. Önceki hücrelerde
@@ -239,7 +247,7 @@ orada `null` doğru etikettir.
 ## Hücre 10 — Eğitim bağımlılıkları
 
 ```python
-!pip install -q -U "peft>=0.13" "bitsandbytes>=0.46.1" "accelerate>=0.34"
+!python -m pip install -U "peft>=0.13" "bitsandbytes>=0.46.1" "accelerate>=0.34"
 ```
 
 ## Hücre 11 — Duman testi (önce bunu çalıştır)
