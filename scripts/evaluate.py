@@ -190,6 +190,50 @@ def karsilastirma_raporu(once: dict, sonra: dict):
     print(f"{'='*58}")
 
 
+def on_kontrol(adaptor_yolu: str):
+    """
+    Adaptorun yuklenebilecegini SANIYELER icinde dogrular.
+
+    Neden var: --compare once base modeli calistiriyordu (347 ornek, ~14 dk),
+    adaptore sira en sonda geliyordu. Adaptor yuklenemezse yarim saatlik is
+    cope gidiyordu. Buradaki kontroller milisaniye suruyor.
+    """
+    if not os.path.isdir(adaptor_yolu):
+        sys.exit(f"HATA: adaptor klasoru yok -> {adaptor_yolu}")
+
+    agirlik = any(
+        os.path.exists(os.path.join(adaptor_yolu, ad))
+        for ad in ("adapter_model.safetensors", "adapter_model.bin")
+    )
+    if not agirlik:
+        sys.exit(
+            f"HATA: {adaptor_yolu} icinde adapter_model.safetensors yok.\n"
+            "  Bu klasor bir LoRA adaptoru degil ya da egitim yarim kalmis."
+        )
+
+    # peft'in kendi torchao kontrolunu burada tetikliyoruz. Kaggle imajindaki
+    # torchao surumu peft'in bekledigi minimumdan eski oldugunda peft, o
+    # dispatcher'i atlamak yerine ImportError firlatiyor. torchao'yu hic
+    # kullanmiyoruz; paket kurulu degilse peft sessizce geciyor.
+    try:
+        from peft.import_utils import is_torchao_available
+    except Exception:
+        return  # peft'in ic yapisi degismis; asil yuklemede zaten anlasilir
+
+    try:
+        is_torchao_available()
+    except ImportError as e:
+        sys.exit(
+            f"HATA: adaptor yuklenemez -> {e}\n"
+            "\n"
+            "  Cozum:  python -m pip uninstall -y torchao\n"
+            "\n"
+            "  torchao'yu kullanmiyoruz, sadece peft'in yolunun ustunde duruyor.\n"
+            "  Kaggle oturumu yeniden baslayinca temel imaj geri geldigi icin\n"
+            "  bu paket tekrar kurulu hale gelir; kaldirma islemi tekrarlanmali."
+        )
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
@@ -208,17 +252,18 @@ def main():
 
     sonuc = {}
     if args.compare:
-        if not os.path.isdir(args.compare):
-            sys.exit(f"HATA: adaptor klasoru yok -> {args.compare}")
-        once = olc(calistir("BASE", args.model, None, ornekler, args.dort_bit), hedefler)
+        on_kontrol(args.compare)
+        # Adaptorlu model ONCE calisiyor: bir sorun varsa 14 dakikalik base
+        # turundan sonra degil, hemen ortaya ciksin. Rapor sirasi degismiyor.
         sonra = olc(calistir("FINE-TUNE", args.model, args.compare, ornekler, args.dort_bit), hedefler)
+        once = olc(calistir("BASE", args.model, None, ornekler, args.dort_bit), hedefler)
         tek_rapor("BASE MODEL", once)
         tek_rapor("FINE-TUNE EDILMIS", sonra)
         karsilastirma_raporu(once, sonra)
         sonuc = {"base": once, "finetuned": sonra}
     else:
-        if args.adapter and not os.path.isdir(args.adapter):
-            sys.exit(f"HATA: adaptor klasoru yok -> {args.adapter}")
+        if args.adapter:
+            on_kontrol(args.adapter)
         ad = "FINE-TUNE EDILMIS" if args.adapter else "BASE MODEL"
         m = olc(calistir(ad, args.model, args.adapter, ornekler, args.dort_bit), hedefler)
         tek_rapor(ad, m)

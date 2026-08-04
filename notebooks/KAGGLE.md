@@ -38,6 +38,35 @@ Notebook açtıktan sonra sağ paneldeki **Settings** bölümünden:
 
 ---
 
+## Hücre 0 — Oturum kurulumu (her yeniden başlatmada çalıştır)
+
+Kaggle oturumu kapandığında (bağlantı koptu, sekmeyi kapattın, süre doldu)
+notebook **temel imaja geri döner**: pip ile kurduğun paketler silinir,
+kaldırdığın paketler geri gelir, `%cd` ile gittiğin klasör unutulur.
+
+Bunları tek tek hatırlamak yerine bu hücreyi çalıştır:
+
+```python
+%cd /kaggle/working/invoice-ocr-service
+!python -m pip install -U "peft>=0.13" "bitsandbytes>=0.46.1" "accelerate>=0.34"
+!python -m pip uninstall -y torchao
+print("\n--- kontrol ---")
+!python -c "import peft, bitsandbytes; print('peft + bitsandbytes: tamam')"
+!python -c "import torchao" 2>&1 | tail -1
+```
+
+Son satırda `ModuleNotFoundError: No module named 'torchao'` görmelisin —
+**bu iyi haber**, kaldırılmış demektir.
+
+Repo klasörü yoksa önce Hücre 2'yi (klonlama) çalıştır.
+
+> **`torchao` neden kaldırılıyor?** Kaggle imajındaki sürüm `peft`'in
+> beklediğinden eski. `peft` uyumsuz sürümü görünce o kod yolunu atlamak
+> yerine hata fırlatıyor ve adaptör yüklenemiyor. Biz torchao'yu
+> kullanmıyoruz; paket hiç yoksa `peft` sessizce geçiyor.
+
+---
+
 ## Hücre 1 — GPU kontrolü
 
 ```python
