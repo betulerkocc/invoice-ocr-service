@@ -127,10 +127,47 @@ dizinine alır; ek bir şey yapmanız gerekmez.
 
 ## Çalışma ortamı
 
-Model inference ve fine-tuning **Kaggle Notebook (Tesla T4 GPU)** üzerinde
-çalışır. Kod VS Code'da yazılır, GitHub'a push edilir, Kaggle notebook'u
-repo'yu klonlayıp çalıştırır. Servisi dışarıya (Postman / Flutter) açmak için
-**ngrok** ile geçici public URL alınır.
+Fine-tuning **Kaggle Notebook (Tesla T4)** üzerinde yapıldı. Kod VS Code'da
+yazılır, GitHub'a push edilir, Kaggle notebook'u repo'yu klonlayıp çalıştırır.
+Ayrıntı: [notebooks/KAGGLE.md](notebooks/KAGGLE.md).
+
+### Yerel GPU ile çalıştırma (önerilen)
+
+Eğitim bittikten sonra Kaggle'a gerek kalmıyor. NVIDIA GPU'lu bir makinede
+değerlendirme ve servis yerelde çalışır — oturum kopması, paket silinmesi ve
+ngrok derdi olmadan.
+
+```bash
+venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu126
+venv\Scripts\python.exe -m pip install "transformers>=4.45" "peft>=0.13" "accelerate>=0.34"
+```
+
+`bitsandbytes` gerekmez — o sadece 4-bit **eğitim** içindi. Değerlendirme ve
+servis 16-bit çalışır; 0.5B'lik model ~1.2 GB VRAM tutar.
+
+Doğrulama:
+
+```bash
+venv\Scripts\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Sürüm sonunda `+cpu` yazıyorsa CUDA'sız derleme kurulmuş demektir; yukarıdaki
+`--index-url`'li komutu tekrarlayın.
+
+> **İndirme 2.5 GB.** pip yavaş bir aynaya düşüp zaman aşımına uğrarsa wheel'i
+> `curl -C -` ile ayrıca indirip (`-C -` kesintiden devam eder) yerel dosyadan
+> kurmak daha güvenilir. Dosya adını değiştirmeyin, pip standart wheel ismi
+> bekler.
+
+Gereken dosyalar:
+
+```
+data/sroie_test.jsonl          prepare_sroie.py üretir (Kaggle'daki Output panelinden de indirilebilir)
+models/qwen-invoice-lora/      eğitilmiş LoRA adaptörü
+```
+
+Servisi dışarıya (Postman / Flutter) açmak için **ngrok** ile geçici public URL
+alınabilir — yerelde çalışırken gerekmez, `http://127.0.0.1:8000/docs` yeterli.
 
 ## Durum
 
