@@ -4,6 +4,7 @@ Gorseldeki metni satir satir okur ve ham metin olarak döndürür.
 """
 
 import os
+import tempfile
 
 _ASCII_OLMAYAN_YEDEK_CACHE = r"C:\paddlex_cache"
 
@@ -41,11 +42,13 @@ from paddleocr import PaddleOCR  # noqa: E402
 
 
 class OCREngine:
-    def __init__(self, lang: str = "en"):
+    def __init__(self, lang: str = "en", max_side: int = 1600):
         """
         PaddleOCR modelini başlatir.
-        lang: OCR dili ('en' İngilizce faturalar için, 'tr' Türkçe için gerekirse)
+        lang    : OCR dili ('en' İngilizce faturalar için, 'tr' Türkçe için gerekirse)
+        max_side: görselin uzun kenari bu degeri asarsa kucultulur (0 = kapali)
         """
+        self.max_side = max_side
         self.ocr = PaddleOCR(
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
@@ -53,12 +56,46 @@ class OCREngine:
             lang=lang,
         )
 
+    def _kucult(self, image_path: str):
+        """
+        Buyuk gorselleri OCR oncesi kucultur, gerekmiyorsa yolu aynen dondurur.
+
+        OCR suresi piksel sayisiyla dogru orantili buyuyor: 3200 pikselde
+        ~41 sn, 1600 pikselde ~14 sn. Telefon fotograflari 3000-4000 piksel
+        geliyor ama fis metnini okumak icin bu cozunurluk gerekmiyor - fazlasi
+        sadece zaman harciyor. Uzun kenari max_side'a indirmek sureyi birkac
+        kat kisaltiyor, okunabilirligi ise pratikte etkilemiyor.
+        """
+        if not self.max_side:
+            return image_path, None
+
+        from PIL import Image
+
+        with Image.open(image_path) as img:
+            uzun = max(img.size)
+            if uzun <= self.max_side:
+                return image_path, None
+
+            oran = self.max_side / uzun
+            yeni = (max(1, int(img.width * oran)), max(1, int(img.height * oran)))
+            kucuk = img.convert("RGB").resize(yeni, Image.LANCZOS)
+
+        gecici = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        gecici.close()
+        kucuk.save(gecici.name)
+        return gecici.name, gecici.name  # (kullanilacak yol, silinecek gecici dosya)
+
     def extract_text(self, image_path: str) -> str:
         """
         Verilen görsel yolundan metni çikarir.
         Dönüş: satir satir birleştirilmiş ham metin (string)
         """
-        result = self.ocr.predict(image_path)
+        yol, gecici = self._kucult(image_path)
+        try:
+            result = self.ocr.predict(yol)
+        finally:
+            if gecici:
+                os.remove(gecici)
 
         lines = []
         for res in result:

@@ -95,7 +95,10 @@ async def lifespan(app: FastAPI):
     print(f"[DB] hazir -> {db.yol()}  ({db.ozet()['adet']} kayit)")
 
     print("[OCR] yukleniyor...")
-    ocr_engine = OCREngine(lang=os.getenv("OCR_LANG", "en"))
+    ocr_engine = OCREngine(
+        lang=os.getenv("OCR_LANG", "en"),
+        max_side=int(os.getenv("OCR_MAX_SIDE", "1600")),
+    )
     print("[OCR] hazir")
 
     _load_llm()

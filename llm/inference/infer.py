@@ -102,6 +102,18 @@ class InvoiceExtractor:
 
             self.model = PeftModel.from_pretrained(self.model, adapter_path)
 
+            # Adaptoru base modele kaynastir.
+            #
+            # LoRA normalde ayri bir katman olarak durur ve her ileri gecişte
+            # fazladan iki matris carpimi yapilir. merge_and_unload() bu
+            # agirliklari base modelin icine yedirir; sonuc matematiksel olarak
+            # ayni ama calisma aninda LoRA katmani kalmadigi icin daha hizli.
+            #
+            # 4-bit modda yapilmiyor: quantize edilmis agirliklara kaynastirma
+            # hassasiyet kaybina yol aciyor.
+            if not load_in_4bit:
+                self.model = self.model.merge_and_unload()
+
         if not load_in_4bit:
             self.model.to(self.device)
         self.model.eval()
