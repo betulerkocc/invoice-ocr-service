@@ -41,20 +41,49 @@ _ascii_cache_dizini_ayarla()
 from paddleocr import PaddleOCR  # noqa: E402
 
 
+# PaddleOCR varsayilan olarak "medium" modelleri indiriyor; bunlar sunucu
+# GPU'lari icin tasarlanmis. CPU'da gercek bir market fisi 40 saniye suruyor.
+# "mobile" modeller telefon/CPU icin tasarlanmis ve ayni fisi 2-3 saniyede
+# okuyor - olculen fark 12-18 kat.
+#
+# Dogruluktan feragat etmiyoruz: karsilastirma testinde firma adi, toplam
+# tutar, tarih, fis no ve VKN'nin hepsi iki modelde de dogru okundu.
+VARSAYILAN_DET_MODEL = "PP-OCRv5_mobile_det"
+VARSAYILAN_REC_MODEL = "PP-OCRv5_mobile_rec"
+
+
 class OCREngine:
-    def __init__(self, lang: str = "en", max_side: int = 1600):
+    def __init__(
+        self,
+        lang: str = "en",
+        max_side: int = 1600,
+        det_model: str | None = VARSAYILAN_DET_MODEL,
+        rec_model: str | None = VARSAYILAN_REC_MODEL,
+    ):
         """
         PaddleOCR modelini başlatir.
-        lang    : OCR dili ('en' İngilizce faturalar için, 'tr' Türkçe için gerekirse)
-        max_side: görselin uzun kenari bu degeri asarsa kucultulur (0 = kapali)
+
+        lang     : OCR dili. YALNIZCA model adlari verilmediginde etkili
+        max_side : görselin uzun kenari bu degeri asarsa kucultulur (0 = kapali)
+        det/rec  : metin tespiti ve tanima modelleri. None verilirse PaddleOCR
+                   kendi varsayilanini (medium) secer - yavas ama referans
         """
         self.max_side = max_side
-        self.ocr = PaddleOCR(
+
+        ayarlar = dict(
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
-            lang=lang,
         )
+        if det_model and rec_model:
+            # Model adi verildiginde PaddleOCR lang'i yok sayiyor; birlikte
+            # gondermek yaniltici bir uyari uretiyor, o yuzden ayirdik.
+            ayarlar["text_detection_model_name"] = det_model
+            ayarlar["text_recognition_model_name"] = rec_model
+        else:
+            ayarlar["lang"] = lang
+
+        self.ocr = PaddleOCR(**ayarlar)
 
     def _kucult(self, image_path: str):
         """

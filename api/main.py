@@ -95,9 +95,18 @@ async def lifespan(app: FastAPI):
     print(f"[DB] hazir -> {db.yol()}  ({db.ozet()['adet']} kayit)")
 
     print("[OCR] yukleniyor...")
+    # Model adlari yalnizca ortam degiskeniyle acikca verilmisse geciliyor;
+    # aksi halde OCREngine kendi varsayilanini (hizli mobile modeller) kullanir.
+    ocr_ayar = {}
+    if os.getenv("OCR_DET_MODEL"):
+        ocr_ayar["det_model"] = os.getenv("OCR_DET_MODEL")
+    if os.getenv("OCR_REC_MODEL"):
+        ocr_ayar["rec_model"] = os.getenv("OCR_REC_MODEL")
+
     ocr_engine = OCREngine(
         lang=os.getenv("OCR_LANG", "en"),
         max_side=int(os.getenv("OCR_MAX_SIDE", "1600")),
+        **ocr_ayar,
     )
     print("[OCR] hazir")
 
