@@ -20,13 +20,18 @@ import time
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 
-_BASE_DIR = os.path.dirname(__file__)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _BASE_DIR)  # db.py bu klasorde
 sys.path.append(os.path.join(_BASE_DIR, "..", "ocr"))
 sys.path.append(os.path.join(_BASE_DIR, "..", "llm"))
 sys.path.append(os.path.join(_BASE_DIR, "..", "llm", "inference"))
+
+import db  # noqa: E402
+
+WEB_DIZINI = os.path.join(_BASE_DIR, "web")
 
 # .env, ocr_engine import edilmeden ONCE okunmali: paddlex cache yolunu
 # (PADDLE_PDX_CACHE_HOME) import aninda bir kere okuyup sabitliyor.
@@ -84,6 +89,11 @@ async def lifespan(app: FastAPI):
     """
     global ocr_engine
 
+    if os.getenv("DB_PATH"):
+        db.yol_ayarla(os.getenv("DB_PATH"))
+    db.hazirla()
+    print(f"[DB] hazir -> {db.yol()}  ({db.ozet()['adet']} kayit)")
+
     print("[OCR] yukleniyor...")
     ocr_engine = OCREngine(lang=os.getenv("OCR_LANG", "en"))
     print("[OCR] hazir")
@@ -96,13 +106,43 @@ app = FastAPI(title="Invoice OCR Service", version="0.2.0", lifespan=lifespan)
 
 
 @app.get("/")
+def arayuz():
+    """Mobil web arayuzu. Telefon tarayicisindan acilir."""
+    return FileResponse(os.path.join(WEB_DIZINI, "index.html"))
+
+
+@app.get("/health")
 def health_check():
     return {
         "status": "ok",
         "ocr_ready": ocr_engine is not None,
         "llm_ready": extractor is not None,
         "llm_error": llm_error,
+        "adapter": os.getenv("ADAPTER_PATH") or None,
+        "kayit_sayisi": db.ozet()["adet"],
     }
+
+
+@app.get("/faturalar")
+def faturalari_listele(limit: int = 50, offset: int = 0):
+    """Kaydedilmis faturalari yeniden eskiye dogru dondurur."""
+    return {"toplam": db.ozet()["adet"], "kayitlar": db.listele(limit, offset)}
+
+
+@app.get("/faturalar/{kayit_id}")
+def fatura_getir(kayit_id: int):
+    """Tek kaydi ham OCR metniyle birlikte dondurur."""
+    kayit = db.getir(kayit_id)
+    if kayit is None:
+        raise HTTPException(status_code=404, detail="Kayit bulunamadi")
+    return kayit
+
+
+@app.delete("/faturalar/{kayit_id}")
+def fatura_sil(kayit_id: int):
+    if not db.sil(kayit_id):
+        raise HTTPException(status_code=404, detail="Kayit bulunamadi")
+    return {"silindi": kayit_id}
 
 
 @app.post("/analyze-invoice")
@@ -136,14 +176,26 @@ async def analyze_invoice(file: UploadFile = File(...)):
                 content={"error": f"LLM hatasi: {e}", "raw_text": raw_text},
             )
 
+    meta = {
+        "llm_used": extractor is not None,
+        "llm_error": llm_error,
+        "ocr_seconds": round(ocr_sure, 2),
+        "llm_seconds": round(llm_sure, 2) if llm_sure is not None else None,
+    }
+
+    # Kayit basarisiz olsa bile sonucu dondurmeye devam ediyoruz: kullanicinin
+    # elindeki analiz, veritabani hatasi yuzunden kaybolmasin.
+    kayit_id, kayit_hatasi = None, None
+    try:
+        kayit_id = db.kaydet(file.filename or "", data, raw_text, meta)
+    except Exception as e:
+        kayit_hatasi = f"{type(e).__name__}: {e}"
+        print(f"[DB] kaydedilemedi -> {kayit_hatasi}")
+
     return {
+        "id": kayit_id,
         "filename": file.filename,
         "data": data,
         "raw_text": raw_text,  # Hata ayiklama icin: LLM mi yanlis anladi, OCR mi kotu okudu?
-        "meta": {
-            "llm_used": extractor is not None,
-            "llm_error": llm_error,
-            "ocr_seconds": round(ocr_sure, 2),
-            "llm_seconds": round(llm_sure, 2) if llm_sure is not None else None,
-        },
+        "meta": {**meta, "kayit_hatasi": kayit_hatasi},
     }

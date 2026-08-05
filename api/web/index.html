@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Fatura OCR</title>
+<style>
+  :root {
+    --bg:#f1f5f9; --kart:#ffffff; --metin:#0f172a; --soluk:#64748b;
+    --cizgi:#e2e8f0; --vurgu:#2563eb; --vurgu-metin:#ffffff;
+    --iyi:#059669; --kotu:#dc2626; --uyari:#d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f172a; --kart:#1e293b; --metin:#f1f5f9; --soluk:#94a3b8;
+      --cizgi:#334155; --vurgu:#3b82f6; --iyi:#34d399; --kotu:#f87171; --uyari:#fbbf24;
+    }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    margin:0; background:var(--bg); color:var(--metin);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:0 0 env(safe-area-inset-bottom);
+  }
+  header {
+    background:var(--kart); border-bottom:1px solid var(--cizgi);
+    padding:14px 16px; position:sticky; top:0; z-index:10;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  header h1 { margin:0; font-size:17px; font-weight:600; }
+  #durum { font-size:12px; color:var(--soluk); white-space:nowrap; }
+  #durum b { color:var(--iyi); }
+  main { max-width:640px; margin:0 auto; padding:16px; }
+  .kart {
+    background:var(--kart); border:1px solid var(--cizgi); border-radius:14px;
+    padding:16px; margin-bottom:14px;
+  }
+  .sekmeler { display:flex; gap:6px; margin-bottom:14px; }
+  .sekmeler button {
+    flex:1; padding:11px; border:1px solid var(--cizgi); background:var(--kart);
+    color:var(--soluk); border-radius:10px; font-size:15px; font-weight:500;
+    cursor:pointer;
+  }
+  .sekmeler button.aktif { background:var(--vurgu); color:var(--vurgu-metin); border-color:var(--vurgu); }
+  label.dosya {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:8px; padding:34px 16px; border:2px dashed var(--cizgi); border-radius:12px;
+    cursor:pointer; text-align:center; color:var(--soluk);
+  }
+  label.dosya span.buyuk { font-size:34px; line-height:1; }
+  label.dosya b { color:var(--metin); font-size:16px; }
+  input[type=file] { display:none; }
+  #onizleme { width:100%; border-radius:10px; margin-top:12px; display:none; }
+  button.ana {
+    width:100%; padding:15px; margin-top:12px; border:0; border-radius:11px;
+    background:var(--vurgu); color:var(--vurgu-metin); font-size:16px;
+    font-weight:600; cursor:pointer;
+  }
+  button.ana:disabled { opacity:.5; cursor:default; }
+  .alan { display:flex; gap:10px; padding:11px 0; border-bottom:1px solid var(--cizgi); }
+  .alan:last-child { border-bottom:0; }
+  .alan .ad { flex:0 0 42%; color:var(--soluk); font-size:13px; text-transform:uppercase; letter-spacing:.4px; }
+  .alan .deger { flex:1; word-break:break-word; font-weight:500; }
+  .alan .deger.bos { color:var(--soluk); font-weight:400; font-style:italic; }
+  .rozet {
+    display:inline-block; padding:3px 9px; border-radius:99px; font-size:12px;
+    background:var(--bg); color:var(--soluk); border:1px solid var(--cizgi);
+  }
+  details { margin-top:12px; }
+  details summary { cursor:pointer; color:var(--soluk); font-size:14px; }
+  details pre {
+    white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.45;
+    background:var(--bg); padding:11px; border-radius:9px; max-height:280px; overflow:auto;
+  }
+  .kayit { padding:13px 0; border-bottom:1px solid var(--cizgi); cursor:pointer; }
+  .kayit:last-child { border-bottom:0; }
+  .kayit .ust { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .kayit .firma { font-weight:600; }
+  .kayit .tutar { color:var(--iyi); font-weight:600; white-space:nowrap; }
+  .kayit .alt { font-size:12.5px; color:var(--soluk); margin-top:3px; }
+  .bos-liste { text-align:center; color:var(--soluk); padding:26px 0; }
+  .hata { color:var(--kotu); font-size:14px; margin-top:10px; }
+  .yukleniyor { display:flex; align-items:center; gap:11px; color:var(--soluk); font-size:14px; }
+  .donen {
+    width:19px; height:19px; border:2.5px solid var(--cizgi);
+    border-top-color:var(--vurgu); border-radius:50%; animation:don .8s linear infinite;
+  }
+  @keyframes don { to { transform:rotate(360deg); } }
+  .gizli { display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Fatura OCR</h1>
+  <div id="durum">bağlanıyor…</div>
+</header>
+
+<main>
+  <div class="sekmeler">
+    <button id="sekmeYeni" class="aktif" onclick="sekmeyeGec('yeni')">Yeni Fatura</button>
+    <button id="sekmeKayit" onclick="sekmeyeGec('kayit')">Kayıtlar</button>
+  </div>
+
+  <!-- YENİ FATURA -->
+  <section id="bolumYeni">
+    <div class="kart">
+      <label class="dosya" for="dosya">
+        <span class="buyuk">📄</span>
+        <b>Fotoğraf çek veya seç</b>
+        <span>Fatura / fiş görseli</span>
+      </label>
+      <input type="file" id="dosya" accept="image/*" capture="environment" onchange="dosyaSecildi(this)">
+      <img id="onizleme" alt="">
+      <button class="ana" id="gonderBtn" onclick="gonder()" disabled>Analiz Et</button>
+      <div id="ilerleme" class="gizli" style="margin-top:12px">
+        <div class="yukleniyor"><div class="donen"></div><span id="ilerlemeYazi">Yükleniyor…</span></div>
+      </div>
+      <div id="hata" class="hata"></div>
+    </div>
+
+    <div class="kart gizli" id="sonucKart">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b>Sonuç</b><span class="rozet" id="sureRozet"></span>
+      </div>
+      <div id="sonucAlanlar"></div>
+      <details>
+        <summary>OCR ham metni</summary>
+        <pre id="hamMetin"></pre>
+      </details>
+    </div>
+  </section>
+
+  <!-- KAYITLAR -->
+  <section id="bolumKayit" class="gizli">
+    <div class="kart">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <b>Kayıtlar</b><span class="rozet" id="kayitSayisi">—</span>
+      </div>
+      <div id="kayitListe"><div class="bos-liste">Yükleniyor…</div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const ALANLAR = [
+  ["company_name",  "Firma"],
+  ["date",          "Tarih"],
+  ["address",       "Adres"],
+  ["total_amount",  "Toplam"],
+  ["invoice_no",    "Fatura No"],
+];
+
+let secilenDosya = null;
+
+function sekmeyeGec(hangi) {
+  const yeni = hangi === "yeni";
+  document.getElementById("bolumYeni").classList.toggle("gizli", !yeni);
+  document.getElementById("bolumKayit").classList.toggle("gizli", yeni);
+  document.getElementById("sekmeYeni").classList.toggle("aktif", yeni);
+  document.getElementById("sekmeKayit").classList.toggle("aktif", !yeni);
+  if (!yeni) kayitlariYukle();
+}
+
+function dosyaSecildi(girdi) {
+  secilenDosya = girdi.files[0] || null;
+  const img = document.getElementById("onizleme");
+  if (secilenDosya) {
+    img.src = URL.createObjectURL(secilenDosya);
+    img.style.display = "block";
+  } else {
+    img.style.display = "none";
+  }
+  document.getElementById("gonderBtn").disabled = !secilenDosya;
+  document.getElementById("hata").textContent = "";
+}
+
+async function gonder() {
+  if (!secilenDosya) return;
+  const btn = document.getElementById("gonderBtn");
+  const ilerleme = document.getElementById("ilerleme");
+  const yazi = document.getElementById("ilerlemeYazi");
+  const hata = document.getElementById("hata");
+
+  btn.disabled = true;
+  hata.textContent = "";
+  document.getElementById("sonucKart").classList.add("gizli");
+  ilerleme.classList.remove("gizli");
+
+  // Islem 5-25 sn surebiliyor; sayac olmadan kullanici donduk saniyor.
+  const basla = Date.now();
+  const sayac = setInterval(() => {
+    yazi.textContent = "Okunuyor ve ayıklanıyor… " + Math.round((Date.now() - basla) / 1000) + " sn";
+  }, 250);
+
+  try {
+    const form = new FormData();
+    form.append("file", secilenDosya);
+    const cevap = await fetch("/analyze-invoice", { method: "POST", body: form });
+    if (!cevap.ok) {
+      let mesaj = "HTTP " + cevap.status;
+      try { const j = await cevap.json(); mesaj = j.detail || j.error || mesaj; } catch (e) {}
+      throw new Error(mesaj);
+    }
+    sonucuGoster(await cevap.json());
+  } catch (e) {
+    hata.textContent = "Hata: " + e.message;
+  } finally {
+    clearInterval(sayac);
+    ilerleme.classList.add("gizli");
+    btn.disabled = false;
+    durumuYenile();
+  }
+}
+
+function sonucuGoster(s) {
+  const kap = document.getElementById("sonucAlanlar");
+  kap.innerHTML = "";
+  for (const [anahtar, etiket] of ALANLAR) {
+    const deger = s.data ? s.data[anahtar] : null;
+    const bos = deger === null || deger === undefined || deger === "";
+    kap.insertAdjacentHTML("beforeend",
+      '<div class="alan"><div class="ad">' + etiket + '</div>' +
+      '<div class="deger' + (bos ? " bos" : "") + '">' +
+      (bos ? "bulunamadı" : kacisliMetin(deger)) + "</div></div>");
+  }
+
+  const m = s.meta || {};
+  const sureler = [];
+  if (m.ocr_seconds != null) sureler.push("OCR " + m.ocr_seconds + " sn");
+  if (m.llm_seconds != null) sureler.push("LLM " + m.llm_seconds + " sn");
+  if (s.id) sureler.push("#" + s.id);
+  document.getElementById("sureRozet").textContent = sureler.join(" · ");
+
+  document.getElementById("hamMetin").textContent = s.raw_text || "(boş)";
+  document.getElementById("sonucKart").classList.remove("gizli");
+
+  if (m.kayit_hatasi) {
+    document.getElementById("hata").textContent =
+      "Sonuç alındı ama veritabanına kaydedilemedi: " + m.kayit_hatasi;
+  }
+  document.getElementById("sonucKart").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function kayitlariYukle() {
+  const liste = document.getElementById("kayitListe");
+  try {
+    const cevap = await fetch("/faturalar?limit=50");
+    const j = await cevap.json();
+    document.getElementById("kayitSayisi").textContent = j.toplam + " kayıt";
+    if (!j.kayitlar.length) {
+      liste.innerHTML = '<div class="bos-liste">Henüz kayıt yok</div>';
+      return;
+    }
+    liste.innerHTML = j.kayitlar.map(k =>
+      '<div class="kayit" onclick="kaydiAc(' + k.id + ')">' +
+        '<div class="ust">' +
+          '<span class="firma">' + kacisliMetin(k.company_name || "(firma yok)") + "</span>" +
+          '<span class="tutar">' + kacisliMetin(k.total_amount || "—") + "</span>" +
+        "</div>" +
+        '<div class="alt">#' + k.id + " · " + kacisliMetin(k.date || "tarihsiz") +
+          " · " + kacisliMetin(k.invoice_no || "no yok") + "</div>" +
+      "</div>").join("");
+  } catch (e) {
+    liste.innerHTML = '<div class="bos-liste">Kayıtlar yüklenemedi: ' + kacisliMetin(e.message) + "</div>";
+  }
+}
+
+async function kaydiAc(id) {
+  const cevap = await fetch("/faturalar/" + id);
+  if (!cevap.ok) return;
+  const k = await cevap.json();
+  sekmeyeGec("yeni");
+  sonucuGoster({
+    id: k.id,
+    data: {
+      company_name: k.company_name, date: k.date, address: k.address,
+      total_amount: k.total_amount, invoice_no: k.invoice_no,
+    },
+    raw_text: k.raw_text,
+    meta: { ocr_seconds: k.ocr_saniye, llm_seconds: k.llm_saniye },
+  });
+  document.getElementById("onizleme").style.display = "none";
+}
+
+async function durumuYenile() {
+  const kutu = document.getElementById("durum");
+  try {
+    const s = await (await fetch("/health")).json();
+    const model = s.adapter ? "fine-tuned" : "base";
+    kutu.innerHTML = s.llm_ready
+      ? "<b>hazır</b> · " + model + " · " + s.kayit_sayisi + " kayıt"
+      : "LLM yok · sadece OCR";
+  } catch (e) {
+    kutu.textContent = "servise ulaşılamıyor";
+  }
+}
+
+// Kullanicidan ve veritabanindan gelen metin dogrudan HTML'e yazilmiyor:
+// fatura icerigi ne olursa olsun sayfayi bozmasin.
+function kacisliMetin(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+durumuYenile();
+</script>
+</body>
+</html>

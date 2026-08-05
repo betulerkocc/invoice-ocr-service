@@ -1,0 +1,30 @@
+{
+  "base": {
+    "n": 347,
+    "alan": {
+      "company_name": 29.971181556195965,
+      "date": 48.99135446685879,
+      "address": 4.610951008645533,
+      "total_amount": 70.02881844380403,
+      "invoice_no": 41.4985590778098
+    },
+    "ortalama": 39.02017291066282,
+    "tam_eslesme": 0.2881844380403458,
+    "bos_string": 171,
+    "tamamen_bos": 1
+  },
+  "finetuned": {
+    "n": 347,
+    "alan": {
+      "company_name": 90.48991354466858,
+      "date": 96.82997118155619,
+      "address": 72.3342939481268,
+      "total_amount": 94.23631123919309,
+      "invoice_no": 91.64265129682997
+    },
+    "ortalama": 89.10662824207493,
+    "tam_eslesme": 60.23054755043228,
+    "bos_string": 0,
+    "tamamen_bos": 0
+  }
+}

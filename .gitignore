@@ -22,6 +22,8 @@ data/processed/
 data/sroie/
 # prepare_sroie.py'nin ürettiği eğitim dosyaları — veriden yeniden üretilebilir
 data/*.jsonl
+# SQLite veritabani (kullanici verisi, git'e girmez)
+data/*.db
 
 # IDE
 .vscode/

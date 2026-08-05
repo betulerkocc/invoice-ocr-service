@@ -108,8 +108,40 @@ Ayarlar için `.env.example` dosyasını `.env` olarak kopyalayın.
 (metni yanlış okudu) yoksa LLM'de mi (metni yanlış anladı) olduğunu ayırt etmenin
 tek yolu bu.
 
-`GET /` — sağlık kontrolü. OCR ve LLM'in yüklenip yüklenmediğini, yüklenmediyse
-sebebini döner.
+Her analiz **SQLite veritabanına kaydedilir** (`data/faturalar.db`) ve cevapta
+`id` döner. Kayıt başarısız olsa bile analiz sonucu döndürülür — veritabanı
+hatası yüzünden kullanıcının elindeki sonuç kaybolmasın.
+
+### Diğer uçlar
+
+| Uç | İş |
+|---|---|
+| `GET /` | Mobil web arayüzü (telefon tarayıcısından açılır) |
+| `GET /health` | OCR/LLM yüklendi mi, hangi adaptör, kaç kayıt var |
+| `GET /faturalar` | Kayıtları yeniden eskiye listeler (`limit`, `offset`) |
+| `GET /faturalar/{id}` | Tek kayıt, OCR ham metniyle |
+| `DELETE /faturalar/{id}` | Kaydı siler |
+
+### Mobil arayüz
+
+`GET /` telefon tarayıcısından açılan tek sayfalık bir arayüz sunar: kamerayla
+fotoğraf çekme, sonucu alan alan görme, OCR ham metnini açıp bakma ve geçmiş
+kayıtları listeleme. Derleme ya da kurulum gerektirmez.
+
+Telefondan erişmek için servisi dışa açık başlatın:
+
+```bash
+venv\Scripts\python.exe -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+Telefon aynı Wi-Fi ağındaysa `http://<bilgisayarın-IP'si>:8000` adresine gidin.
+Farklı ağdaysa ngrok ile geçici public URL alın.
+
+### Veritabanı
+
+SQLite seçildi: tek dosya, sunucu kurulumu yok, Python'un içinde geliyor.
+Alanlar ayrı sütunlarda tutuluyor ki "bu firmanın faturaları" gibi sorgular
+yazılabilsin. Yol `DB_PATH` ile değiştirilebilir.
 
 ### LLM olmadan çalışma
 
