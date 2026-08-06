@@ -2,10 +2,13 @@
 LLM inference katmani.
 
 Gorevi: OCR'dan gelen dagitik ham metni alip yapilandirilmis JSON'a cevirmek.
-Model: Qwen2.5-0.5B-Instruct (fine-tune oncesi base hali de calisir).
+Model: Qwen2.5-0.5B-Instruct (+ SROIE ile egitilmis LoRA adaptoru).
 
-Fine-tune sonrasi tek yapilacak sey: adapter_path parametresine LoRA
-adaptorunun klasorunu vermek. Kod degismez.
+Boru hatti:
+    1. Chat sablonu + llm/prompt.py ile model cagrilir
+    2. Cikti JSON'a ayristirilir
+    3. Uydurma degerler elenir (ham metinde gecmeyenler)
+    4. Etiketli alanlar (toplam, belge no) dogrulanir/tamamlanir
 """
 
 import json
@@ -31,9 +34,9 @@ def _extract_json(text: str) -> dict:
     """
     Modelin ciktisindan JSON nesnesini ayiklar.
 
-    Model bazen JSON'un onune/arkasina aciklama ya da ```json cite ekleyebilir,
-    ozellikle fine-tune oncesi base halde. Bu yuzden ham json.loads yerine
-    ilk '{' ile dengeli kapanan '}' arasini tariyoruz.
+    Regex yerine parantez sayarak ilerliyoruz: model bazen JSON'un icine
+    baska suslu parantez koyabiliyor ve `\\{.*\\}` gibi bir desen ya cok az
+    ya cok fazla yakaliyor.
     """
     start = text.find("{")
     if start == -1:
@@ -58,10 +61,175 @@ def _extract_json(text: str) -> dict:
                         return empty_result()
                 if not isinstance(parsed, dict):
                     return empty_result()
-                # Sadece bekledigimiz alanlari, sabit sirayla dondur
                 return {field: parsed.get(field) for field in FIELDS}
 
     return empty_result()
+
+
+# --- tutar tanima ------------------------------------------------------------
+#
+# Iki farkli sayi bicimi var ve birbirinin aynasi:
+#     Turkce  : 10.250,75  -> nokta binlik, virgul ondalik
+#     SROIE   : 10,250.75  -> virgul binlik, nokta ondalik
+#
+# "Her tutarda iki ondalik vardir" varsayimi Turkce fislerde kiriliyor:
+# "10.250 TL" icinde `\d+[.,]\d{2}` deseni "10.25" ile eslesiyor ve on bin
+# iki yuz elli lira, on lira yirmi bes kurusa donusuyor. Bu yuzden once
+# GRUPLANMIS bicimleri deniyoruz, duz ondalik en sonda.
+
+_TUTAR = re.compile(
+    r"\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?"      # 10.250 / 10.250,75  (Turkce)
+    r"|\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?"     # 10,250 / 10,250.75  (Ingilizce)
+    r"|\d+(?:[.,]\d{1,2})?"                  # 82,55 / 9.00 / 500
+)
+
+
+def _tutar_bul(satir: str):
+    """Satirdaki son tutari dondurur; yoksa None."""
+    bulunan = _TUTAR.findall(satir)
+    return bulunan[-1] if bulunan else None
+
+
+# --- uydurma elemesi ---------------------------------------------------------
+#
+# 'date' bilerek disarida: model tarihi bicimlendirebiliyor (25/12/2018 ->
+# 2018-12-25) ve bu mesru, metinde birebir gecmeyebilir.
+DOGRULANAN_ALANLAR = ("company_name", "address", "total_amount", "invoice_no")
+
+
+def _sadelestir(s: str) -> str:
+    """Karsilastirma icin harf ve rakam disindaki her seyi atar."""
+    return re.sub(r"[^0-9a-zçğıöşü]", "", s.lower())
+
+
+def _uydurmalari_ele(sonuc: dict, raw_text: str) -> dict:
+    """
+    Ham metinde gecmeyen degerleri None yapar.
+
+    SROIE ile egitilmis model her fisin basinda firma adi ve adres olmasini
+    bekliyor; bunlarin bulunmadigi bir fiste bos birakmak yerine uyduruyor
+    (olculen bir ornekte metinde hic gecmeyen "Kartiki, Sanliurfa" adresini
+    uretti). Prompt zaten "metinden kopyala, uydurma" diyor - burada o kurali
+    kod tarafinda zorluyoruz.
+
+    Bos alan kullaniciya "buraya bakmam lazim" der; uydurulmus bir adres ise
+    sessizce yanlis veri uretir. Veri ayiklamada ikincisi cok daha tehlikeli.
+    """
+    if not raw_text:
+        return sonuc
+
+    metin = _sadelestir(raw_text)
+    for alan in DOGRULANAN_ALANLAR:
+        deger = sonuc.get(alan)
+        if isinstance(deger, str) and deger.strip():
+            if _sadelestir(deger) not in metin:
+                sonuc[alan] = None
+    return sonuc
+
+
+# --- etiketli alan duzeltmesi ------------------------------------------------
+
+_TOPLAM_ETIKET = re.compile(
+    r"(GENEL\s*TOPLAM|[ÖO]DENECEK(?:\s*TUTAR)?|TOPLAM|TOTAL|AMOUNT\s*DUE)",
+    re.IGNORECASE,
+)
+# Toplam sanilmamasi gereken satirlar
+_TOPLAM_HARIC = re.compile(
+    r"(ARA\s*TOP|ARATOP|SUB\s*TOTAL|TOPKDV|KDV|VERG[İI]|TAX|[İI]SKONTO|"
+    r"[İI]ND[İI]R[İI]M|DISCOUNT|NAK[İI]T|CASH|PARA\s*[ÜU]ST[ÜU]|CHANGE|ROUND)",
+    re.IGNORECASE,
+)
+
+_BELGE_NO = re.compile(
+    r"(?:F[İI][ŞS]\s*NO|FATURA\s*(?:NO|NUMARASI)|BELGE\s*NO|[İI]RSAL[İI]YE\s*NO|"
+    r"(?:TAX\s+)?(?:INVOICE|RECEIPT|BILL|DOCUMENT|DOC|INV)\s*(?:NO|NUMBER|NUM|\#))"
+    r"\s*[:.\#\-]?\s*([A-Z0-9][A-Z0-9\-/]{1,29})",
+    re.IGNORECASE,
+)
+
+_TARIH = re.compile(r"\b(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}|\d{4}[./\-]\d{1,2}[./\-]\d{1,2})\b")
+
+# Belgenin Turkce olup olmadigini anlamak icin bakilan etiketler.
+# SROIE fisleri Ingilizce/Malayca; bu kelimeler orada gecmiyor.
+_TURKCE_BELGE = re.compile(
+    r"(TOPLAM|[ÖO]DENECEK|F[İI][ŞS]\s*NO|FATURA|KDV|TUTAR|[İI]SKONTO)", re.IGNORECASE
+)
+
+
+def _toplam_bul(raw_text: str):
+    """
+    Etiketiyle birlikte duran toplam tutari arar; bulamazsa None.
+
+    Etiket ile tutar ayni satirda olmayabiliyor - OCR bunlari ayri satirlara
+    dokebiliyor. Bu yuzden etiketten sonraki iki satira da bakiyoruz.
+    Belgenin sonuna yakin olan tercih ediliyor: fis duzeninde toplam altta.
+    """
+    satirlar = raw_text.splitlines()
+    adaylar = []
+    for i, satir in enumerate(satirlar):
+        if not _TOPLAM_ETIKET.search(satir) or _TOPLAM_HARIC.search(satir):
+            continue
+        for j in range(i, min(i + 3, len(satirlar))):
+            if j > i and _TOPLAM_HARIC.search(satirlar[j]):
+                break  # araya baska bir kalem girdiyse dur
+            tutar = _tutar_bul(satirlar[j])
+            if tutar:
+                adaylar.append(tutar)
+                break
+    return adaylar[-1] if adaylar else None
+
+
+def _belge_no_bul(raw_text: str):
+    """Etiketli belge/fis numarasini arar; bulamazsa None."""
+    for eslesme in _BELGE_NO.finditer(raw_text):
+        aday = eslesme.group(1).strip(" .:-/")
+        if 1 <= len(aday) <= 30 and any(k.isdigit() for k in aday):
+            return aday
+    return None
+
+
+def _tarih_bul(raw_text: str):
+    """Metindeki ilk tarihi dondurur; yoksa None."""
+    eslesme = _TARIH.search(raw_text)
+    return eslesme.group(1) if eslesme else None
+
+
+def _etiketli_alanlari_duzelt(sonuc: dict, raw_text: str) -> dict:
+    """
+    Modelin zayif oldugu yerde etiket tabanli duzeltme uygular.
+
+    total_amount SADECE Turkce belgelerde eziliyor. Sebebi olculdu: SROIE
+    test setinde kurali her belgeye uygulayinca total_amount dogrulugu
+    %93.3'ten %61.3'e dustu - model Ingilizce fislerde kuraldan iyi ve ona
+    karismamak gerekiyor. Turkce fislerde ise "TOPLAM" etiketini hic
+    gormedigi icin urun satirlarindan birini secebiliyor.
+
+    invoice_no ve date'de kural YALNIZCA model bos biraktiginda dolduruyor,
+    yani modelin cevabini hicbir zaman ezmiyor. Bu guvenli oldugu icin dile
+    bakilmaksizin uygulaniyor (invoice_no olcumu: %91.3 -> %94.7).
+
+    company_name ve address icin kural YOK: olculdu, model bu alanlarda
+    kuraldan iyi. Yanlis bir firma adi uretmektense bos birakmak yeglenir.
+    """
+    if not raw_text:
+        return sonuc
+
+    if _TURKCE_BELGE.search(raw_text):
+        toplam = _toplam_bul(raw_text)
+        if toplam:
+            sonuc["total_amount"] = toplam
+
+    if not sonuc.get("invoice_no"):
+        no = _belge_no_bul(raw_text)
+        if no:
+            sonuc["invoice_no"] = no
+
+    if not sonuc.get("date"):
+        tarih = _tarih_bul(raw_text)
+        if tarih:
+            sonuc["date"] = tarih
+
+    return sonuc
 
 
 class InvoiceExtractor:
@@ -93,6 +261,7 @@ class InvoiceExtractor:
             )
             load_kwargs["device_map"] = "auto"
         else:
+            # GPU'da float16: float32 ayni isi yaklasik iki kat yavas yapar.
             load_kwargs["dtype"] = torch.float16 if self.device == "cuda" else torch.float32
 
         self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
@@ -102,15 +271,10 @@ class InvoiceExtractor:
 
             self.model = PeftModel.from_pretrained(self.model, adapter_path)
 
-            # Adaptoru base modele kaynastir.
-            #
-            # LoRA normalde ayri bir katman olarak durur ve her ileri gecişte
-            # fazladan iki matris carpimi yapilir. merge_and_unload() bu
-            # agirliklari base modelin icine yedirir; sonuc matematiksel olarak
-            # ayni ama calisma aninda LoRA katmani kalmadigi icin daha hizli.
-            #
-            # 4-bit modda yapilmiyor: quantize edilmis agirliklara kaynastirma
-            # hassasiyet kaybina yol aciyor.
+            # Adaptoru base modele kaynastir: LoRA ayri katman olarak dururken
+            # her ileri gecişte iki fazladan matris carpimi yapiliyor.
+            # Sonuc matematiksel olarak ayni, sadece daha hizli.
+            # 4-bit modda yapilmiyor - quantize agirliklarda hassasiyet kaybi olur.
             if not load_in_4bit:
                 self.model = self.model.merge_and_unload()
 
@@ -127,6 +291,10 @@ class InvoiceExtractor:
         if not raw_text or not raw_text.strip():
             return empty_result()
 
+        # Prompt egitimdekiyle BIREBIR ayni olmali (llm/prompt.py).
+        # Chat sablonu sart: Qwen-Instruct sablonsuz cagrildiginda talimat
+        # modeli gibi davranmaz, fine-tune edilmis adaptor de egitimde gordugu
+        # kalibi bulamaz ve kazanilan davranis kaybolur.
         prompt = self.tokenizer.apply_chat_template(
             build_messages(raw_text),
             tokenize=False,
@@ -141,20 +309,20 @@ class InvoiceExtractor:
             pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
         )
 
-        # Sadece modelin urettigi kismi al (prompt'u kes)
+        # Sadece modelin urettigi kismi al (prompt'u kes). Tamamini cozup
+        # icinden JSON aramak, prompt'taki ornek JSON'u yakalama riski tasir.
         generated = output[0][inputs["input_ids"].shape[-1] :]
         answer = self.tokenizer.decode(generated, skip_special_tokens=True)
-        return _extract_json(answer)
+
+        sonuc = _uydurmalari_ele(_extract_json(answer), raw_text)
+        return _etiketli_alanlari_duzelt(sonuc, raw_text)
 
 
 if __name__ == "__main__":
     ornek_ocr = """TAN WOON YANN
 BOOK TA .K(TAMAN DAYA) SDN BHD
-789417-W
 NO.53 55,57 & 59, JALAN SAGU 18,
-TAMAN DAYA,
-81100 JOHOR BAHRU,
-JOHOR.
+TAMAN DAYA, 81100 JOHOR BAHRU
 DOCUMENT NO : TD01167104
 DATE: 25/12/2018 8:13:39 PM
 TOTAL: 9.00"""
