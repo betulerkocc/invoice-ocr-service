@@ -85,9 +85,40 @@ _TUTAR = re.compile(
 
 
 def _tutar_bul(satir: str):
-    """Satirdaki son tutari dondurur; yoksa None."""
-    bulunan = _TUTAR.findall(satir)
-    return bulunan[-1] if bulunan else None
+    """
+    Satirdaki son tutari dondurur; yoksa None.
+
+    Yuzde isaretinden hemen sonra gelen sayilar atlanir: "%10" bir KDV
+    oranidir, tutar degil. Fislerde oran ile tutar yan yana durabiliyor
+    ("KDV %10 20,73") - bu yuzden satirin tamamini atmak yerine yalnizca
+    yuzdeye ait sayiyi eliyoruz.
+    """
+    adaylar = [
+        m.group(0)
+        for m in _TUTAR.finditer(satir)
+        if not satir[: m.start()].rstrip().endswith("%")
+    ]
+    return adaylar[-1] if adaylar else None
+
+
+def _tutari_sayiya_cevir(tutar: str) -> float:
+    """
+    Metin tutari karsilastirilabilir sayiya cevirir.
+
+    Iki bicim birbirinin aynasi oldugu icin hangi ayiracin binlik hangisinin
+    ondalik oldugunu desene bakarak ayirt ediyoruz:
+        10.250,75 -> nokta binlik, virgul ondalik  (Turkce)
+        10,250.75 -> virgul binlik, nokta ondalik  (Ingilizce)
+    """
+    s = tutar.strip()
+    try:
+        if re.fullmatch(r"\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?", s):
+            return float(s.replace(".", "").replace(",", "."))
+        if re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?", s):
+            return float(s.replace(",", ""))
+        return float(s.replace(",", "."))
+    except ValueError:
+        return 0.0
 
 
 # --- uydurma elemesi ---------------------------------------------------------
@@ -162,7 +193,13 @@ def _toplam_bul(raw_text: str):
 
     Etiket ile tutar ayni satirda olmayabiliyor - OCR bunlari ayri satirlara
     dokebiliyor. Bu yuzden etiketten sonraki iki satira da bakiyoruz.
-    Belgenin sonuna yakin olan tercih ediliyor: fis duzeninde toplam altta.
+
+    Adaylar arasindan EN BUYUK olani seciliyor, sonuncusu degil. Sebebi
+    olculdu: fislerin altindaki KDV tablosunda "Toplam" bir sutun BASLIGI
+    olarak geciyor ve altinda oran (%10) ya da KDV tutari (20,73) duruyor.
+    Sonuncuyu alan bir kural 228,00 yerine 10'u seciyordu. Genel toplam
+    tanimi geregi bilesenlerinden buyuk oldugu icin en buyugu almak bu
+    karisikligi coziyor.
     """
     satirlar = raw_text.splitlines()
     adaylar = []
@@ -176,7 +213,9 @@ def _toplam_bul(raw_text: str):
             if tutar:
                 adaylar.append(tutar)
                 break
-    return adaylar[-1] if adaylar else None
+    if not adaylar:
+        return None
+    return max(adaylar, key=_tutari_sayiya_cevir)
 
 
 def _belge_no_bul(raw_text: str):
