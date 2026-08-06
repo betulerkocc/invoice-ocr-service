@@ -59,21 +59,33 @@ class OCREngine:
         max_side: int = 1600,
         det_model: str | None = VARSAYILAN_DET_MODEL,
         rec_model: str | None = VARSAYILAN_REC_MODEL,
+        foto_modu: bool = True,
     ):
         """
         PaddleOCR modelini başlatir.
 
-        lang     : OCR dili. YALNIZCA model adlari verilmediginde etkili
-        max_side : görselin uzun kenari bu degeri asarsa kucultulur (0 = kapali)
-        det/rec  : metin tespiti ve tanima modelleri. None verilirse PaddleOCR
-                   kendi varsayilanini (medium) secer - yavas ama referans
+        lang      : OCR dili. YALNIZCA model adlari verilmediginde etkili
+        max_side  : görselin uzun kenari bu degeri asarsa kucultulur (0 = kapali)
+        det/rec   : metin tespiti ve tanima modelleri. None verilirse PaddleOCR
+                    kendi varsayilanini (medium) secer - yavas ama referans
+        foto_modu : telefonla cekilmis fotograflar icin duzeltme modullerini acar
+
+        foto_modu neden var: taranmis PNG'lerde OCR neredeyse kusursuz okuyor
+        ama telefon fotograflarinda sonuclar bozuluyor. Sebep fotografta olup
+        taramada olmayan seyler - perspektif egrilik, burusukluk, egik cekim.
+        PaddleOCR'in bunlari duzelten modulleri var; hiz kaygisiyla kapaliydi.
+        Mobile modellere gecisle OCR 2.9 sn'ye indigi icin artik acmaya butce
+        var. Taranmis belgelerle calisiliyorsa OCR_FOTO_MODU=0 ile kapatilabilir.
         """
         self.max_side = max_side
 
         ayarlar = dict(
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
+            # Belgenin 90/180/270 derece donuk olup olmadigini bulur
+            use_doc_orientation_classify=foto_modu,
+            # Perspektif ve burusukluk duzeltmesi (belgeyi "duzler")
+            use_doc_unwarping=foto_modu,
+            # Tek tek satirlarin ters/egik olup olmadigini bulur
+            use_textline_orientation=foto_modu,
         )
         if det_model and rec_model:
             # Model adi verildiginde PaddleOCR lang'i yok sayiyor; birlikte

@@ -101,6 +101,13 @@
   label.dosya b { font-size:14.5px; font-weight:600; letter-spacing:-.008em; }
   label.dosya span { font-size:12.5px; color:var(--sonuk); }
   input[type=file] { display:none; }
+  label.ikincil {
+    display:flex; align-items:center; justify-content:center; gap:7px;
+    margin-top:9px; padding:9.5px; border:1px solid var(--cizgi-koyu);
+    border-radius:10px; font-size:13.5px; font-weight:550; color:var(--soluk);
+    cursor:pointer; transition:border-color .16s,color .16s;
+  }
+  label.ikincil:active { border-color:var(--vurgu); color:var(--vurgu); }
 
   .onizleme-sarmal { position:relative; margin-top:13px; display:none; }
   #onizleme { width:100%; border-radius:12px; display:block; border:1px solid var(--cizgi); }
@@ -233,10 +240,22 @@
             <circle cx="12" cy="13" r="3.4"/>
           </svg>
         </div>
-        <b>Fotoğraf çek veya seç</b>
-        <span>Fatura ya da fiş görseli</span>
+        <b>Görsel seç</b>
+        <span>Galeriden ya da dosyalardan</span>
       </label>
-      <input type="file" id="dosya" accept="image/*" capture="environment" onchange="dosyaSecildi(this)">
+      <!-- Iki ayri girdi: 'capture' niteligi telefonda dogrudan kamerayi acar
+           ve galeri secenegini gizler. Ikisini ayirmasak kullanici galerideki
+           bir goruntuyu secemiyor. -->
+      <input type="file" id="dosyaGaleri" accept="image/*" onchange="dosyaSecildi(this)">
+      <input type="file" id="dosyaKamera" accept="image/*" capture="environment" onchange="dosyaSecildi(this)">
+      <label class="ikincil" for="dosyaKamera">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14.5 4h-5L8 6H4.5A1.5 1.5 0 0 0 3 7.5v11A1.5 1.5 0 0 0 4.5 20h15a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 19.5 6H16z"/>
+          <circle cx="12" cy="13" r="3.4"/>
+        </svg>
+        Fotoğraf çek
+      </label>
 
       <div class="onizleme-sarmal" id="onizlemeSarmal">
         <img id="onizleme" alt="">
@@ -318,7 +337,8 @@ function dosyaSecildi(girdi) {
 }
 
 function secimiTemizle() {
-  document.getElementById("dosya").value = "";
+  document.getElementById("dosyaGaleri").value = "";
+  document.getElementById("dosyaKamera").value = "";
   dosyaSecildi({ files: [] });
   document.getElementById("sonucKart").classList.add("gizli");
 }

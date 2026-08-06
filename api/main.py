@@ -106,6 +106,7 @@ async def lifespan(app: FastAPI):
     ocr_engine = OCREngine(
         lang=os.getenv("OCR_LANG", "en"),
         max_side=int(os.getenv("OCR_MAX_SIDE", "1600")),
+        foto_modu=_flag("OCR_FOTO_MODU", "1"),
         **ocr_ayar,
     )
     print("[OCR] hazir")
