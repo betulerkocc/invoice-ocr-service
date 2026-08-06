@@ -354,6 +354,33 @@ function adimDurum(ad, durum, sure) {
   document.getElementById("sure" + ad).textContent = sure || "";
 }
 
+// Gorseli GONDERMEDEN once tarayicida kucult.
+//
+// Telefon fotograflari 3000-4000 piksel ve 4-5 MB geliyor. Sunucu zaten
+// 1600 piksele indiriyor, yani o megabaytlarin buyuk kismi sadece aga
+// yukleniyor ve atiliyor. Kucultmeyi telefonda yapinca yukleme suresi ve
+// OCR'in isleyecegi veri birlikte dusuyor.
+async function kucult(dosya, azamiKenar = 1600, kalite = 0.85) {
+  try {
+    const bitmap = await createImageBitmap(dosya);
+    const uzun = Math.max(bitmap.width, bitmap.height);
+    if (uzun <= azamiKenar) { bitmap.close(); return dosya; }
+
+    const oran = azamiKenar / uzun;
+    const tuval = document.createElement("canvas");
+    tuval.width = Math.round(bitmap.width * oran);
+    tuval.height = Math.round(bitmap.height * oran);
+    tuval.getContext("2d").drawImage(bitmap, 0, 0, tuval.width, tuval.height);
+    bitmap.close();
+
+    const blob = await new Promise(c => tuval.toBlob(c, "image/jpeg", kalite));
+    if (!blob) return dosya;
+    return new File([blob], "fis.jpg", { type: "image/jpeg" });
+  } catch (e) {
+    return dosya;  // kucultme basarisiz olursa aslini gonder, akis durmasin
+  }
+}
+
 async function gonder() {
   if (!secilenDosya) return;
   const btn = document.getElementById("gonderBtn");
@@ -370,8 +397,9 @@ async function gonder() {
   }, 200);
 
   try {
+    const gonderilecek = await kucult(secilenDosya);
     const form = new FormData();
-    form.append("file", secilenDosya);
+    form.append("file", gonderilecek);
     const cevap = await fetch("/analyze-invoice", { method: "POST", body: form });
     if (!cevap.ok) {
       let m = "HTTP " + cevap.status;

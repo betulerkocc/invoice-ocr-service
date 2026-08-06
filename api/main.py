@@ -112,6 +112,22 @@ async def lifespan(app: FastAPI):
     print("[OCR] hazir")
 
     _load_llm()
+
+    # Modelleri acilista bir kere calistir.
+    #
+    # Ilk gercek istek, CUDA cekirdeklerinin derlenmesi ve onbelleklerin
+    # dolmasi yuzunden sonrakilerin birkac kati suruyor. Bunu kullaniciya
+    # yasatmak yerine burada, servis henuz kimseye cevap vermiyorken
+    # hallediyoruz. Demo/sunum sirasinda ilk istegin yavas gelmesi bu
+    # yuzdendi.
+    if extractor is not None:
+        try:
+            t0 = time.time()
+            extractor.extract("ISITMA\nTOTAL: 1.00")
+            print(f"[LLM] isitma tamam ({time.time() - t0:.1f} sn)")
+        except Exception as e:
+            print(f"[LLM] isitma atlandi -> {e}")
+
     yield
 
 
