@@ -232,6 +232,22 @@ def kategori_listesi():
     return {"kategoriler": kat.KATEGORILER}
 
 
+@app.patch("/faturalar/{kayit_id}")
+def kaydi_duzelt(kayit_id: int, alanlar: dict = Body(...)):
+    """
+    Kaydin alanlarini elle duzeltir.
+
+    Model her alani dogru getirmiyor; duzeltilen degerler hem kaydi
+    duzeltiyor hem de ilerideki egitim icin etiketli veri birikiyor.
+    Yalnizca db.DUZENLENEBILIR_ALANLAR guncellenebiliyor.
+    """
+    if not db.kaydi_guncelle(kayit_id, alanlar):
+        raise HTTPException(
+            status_code=404, detail="Kayit bulunamadi ya da gecerli alan verilmedi"
+        )
+    return db.getir(kayit_id)
+
+
 @app.patch("/faturalar/{kayit_id}/kategori")
 def kategori_degistir(kayit_id: int, kategori: str = Body(..., embed=True)):
     """

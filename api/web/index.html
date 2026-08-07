@@ -192,6 +192,40 @@
     cursor:pointer; -webkit-appearance:none; appearance:none; text-align:center;
   }
 
+  /* duzenlenebilir alanlar */
+  .satir .deger-giris {
+    flex:1; min-width:0; font:inherit; font-size:14.5px; font-weight:500;
+    color:var(--metin); background:transparent; border:0; border-bottom:1px dashed transparent;
+    padding:1px 0; border-radius:0;
+  }
+  .satir .deger-giris:focus { outline:none; border-bottom-color:var(--vurgu); }
+  .satir .deger-giris::placeholder { color:var(--sonuk); font-weight:400; }
+  .satir.kaydedildi .deger-giris { border-bottom-color:var(--iyi); }
+  .tutar-kutu .dg-giris {
+    font:inherit; font-size:22px; font-weight:680; color:var(--iyi);
+    letter-spacing:-.02em; background:transparent; border:0; text-align:right;
+    width:55%; padding:0;
+  }
+  .tutar-kutu .dg-giris:focus { outline:none; }
+
+  /* toplu yukleme kuyrugu */
+  .kuyruk { margin-top:13px; }
+  .kuyruk-satir {
+    display:flex; align-items:center; gap:10px; padding:9px 0;
+    border-top:1px solid var(--cizgi); font-size:13px;
+  }
+  .kuyruk-satir:first-child { border-top:0; }
+  .kuyruk-satir .durum {
+    width:18px; height:18px; border-radius:6px; flex:0 0 auto; display:grid;
+    place-items:center; font-size:10px; background:var(--bg);
+    border:1px solid var(--cizgi); color:var(--sonuk);
+  }
+  .kuyruk-satir.bitti .durum { background:var(--iyi-bg); border-color:transparent; color:var(--iyi); }
+  .kuyruk-satir.hata .durum { background:var(--kotu-bg); border-color:transparent; color:var(--kotu); }
+  .kuyruk-satir.isleniyor .durum { background:var(--vurgu); border-color:var(--vurgu); }
+  .kuyruk-satir .ad { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--soluk); }
+  .kuyruk-satir .bilgi { flex:0 0 auto; font-size:12px; color:var(--sonuk); }
+
   .kat-rozet {
     display:inline-flex; align-items:center; gap:6px; padding:5px 11px;
     border-radius:99px; background:var(--vurgu-yumusak); color:var(--vurgu);
@@ -289,12 +323,12 @@
           </svg>
         </div>
         <b>Görsel seç</b>
-        <span>Galeriden ya da dosyalardan</span>
+        <span>Tek tek ya da toplu — birden fazla seçebilirsin</span>
       </label>
       <!-- Iki ayri girdi: 'capture' niteligi telefonda dogrudan kamerayi acar
            ve galeri secenegini gizler. Ikisini ayirmasak kullanici galerideki
            bir goruntuyu secemiyor. -->
-      <input type="file" id="dosyaGaleri" accept="image/*" onchange="dosyaSecildi(this)">
+      <input type="file" id="dosyaGaleri" accept="image/*" multiple onchange="dosyaSecildi(this)">
       <input type="file" id="dosyaKamera" accept="image/*" capture="environment" onchange="dosyaSecildi(this)">
       <label class="ikincil" for="dosyaKamera">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -311,6 +345,8 @@
       </div>
 
       <button class="ana" id="gonderBtn" onclick="gonder()" disabled>Analiz Et</button>
+
+      <div class="kuyruk gizli" id="kuyruk"></div>
 
       <div id="ilerleme" class="adimlar gizli">
         <div class="adim" id="adimOcr">
@@ -333,7 +369,7 @@
         <select class="kat-sec gizli" id="katSec" onchange="kategoriDegistir()"></select>
       </div>
       <div class="tutar-kutu gizli" id="tutarKutu">
-        <span class="et">Toplam</span><span class="dg sayi-hiza" id="tutarDeger"></span>
+        <span class="et">Toplam</span><input class="dg-giris sayi-hiza" id="tutarDeger" data-alan="total_amount" placeholder="—" onchange="alaniKaydet(this)">
       </div>
       <div id="sonucAlanlar"></div>
       <div class="butonlar">
@@ -359,7 +395,7 @@
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetAdet">—</div><div class="et">Kayıtlı fatura</div></div>
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetTutar">—</div><div class="et">Toplam tutar</div></div>
     </div>
-    <a class="disa-aktar" id="disaAktar" href="/disa-aktar" download>CSV indir (muhasebeci için)</a>
+    <a class="disa-aktar" id="disaAktar" href="/disa-aktar" download>CSV indir</a>
     <div class="kart gizli" id="katKart">
       <div class="baslik">Kategoriye göre harcama</div>
       <div id="katListe"></div>
@@ -391,21 +427,55 @@ function sekmeyeGec(hangi) {
   if (!yeni) kayitlariYukle();
 }
 
+let secilenDosyalar = [];
+
 function dosyaSecildi(girdi) {
-  secilenDosya = girdi.files[0] || null;
+  secilenDosyalar = Array.from(girdi.files || []);
+  secilenDosya = secilenDosyalar[0] || null;
+
   const sarmal = document.getElementById("onizlemeSarmal");
-  if (secilenDosya) {
+  const kuyruk = document.getElementById("kuyruk");
+
+  // Tek dosyada onizleme, birden fazlasinda kuyruk listesi gosteriliyor:
+  // 40 fotografin kucuk resmini basmak ekrani ise yaramaz hale getiriyor.
+  if (secilenDosyalar.length === 1) {
     document.getElementById("onizleme").src = URL.createObjectURL(secilenDosya);
     sarmal.style.display = "block"; sarmal.classList.add("belir");
-  } else sarmal.style.display = "none";
-  document.getElementById("gonderBtn").disabled = !secilenDosya;
+    kuyruk.classList.add("gizli");
+  } else if (secilenDosyalar.length > 1) {
+    sarmal.style.display = "none";
+    kuyrugu_ciz();
+    kuyruk.classList.remove("gizli");
+  } else {
+    sarmal.style.display = "none";
+    kuyruk.classList.add("gizli");
+  }
+
+  const btn = document.getElementById("gonderBtn");
+  btn.disabled = !secilenDosyalar.length;
+  btn.textContent = secilenDosyalar.length > 1
+    ? secilenDosyalar.length + " fişi analiz et" : "Analiz Et";
   hatayiGizle();
+}
+
+function kuyrugu_ciz(durumlar) {
+  document.getElementById("kuyruk").innerHTML = secilenDosyalar.map((d, i) => {
+    const dm = (durumlar && durumlar[i]) || {};
+    const sinif = dm.durum || "";
+    const isaret = sinif === "bitti" ? "✓" : sinif === "hata" ? "!" : (i + 1);
+    return '<div class="kuyruk-satir ' + sinif + '">' +
+             '<span class="durum">' + isaret + "</span>" +
+             '<span class="ad">' + kacisli(d.name) + "</span>" +
+             '<span class="bilgi">' + kacisli(dm.bilgi || "") + "</span>" +
+           "</div>";
+  }).join("");
 }
 
 function secimiTemizle() {
   document.getElementById("dosyaGaleri").value = "";
   document.getElementById("dosyaKamera").value = "";
   dosyaSecildi({ files: [] });
+  document.getElementById("kuyruk").classList.add("gizli");
   document.getElementById("sonucKart").classList.add("gizli");
 }
 
@@ -448,6 +518,7 @@ async function kucult(dosya, azamiKenar = 1600, kalite = 0.85) {
 }
 
 async function gonder() {
+  if (secilenDosyalar.length > 1) return topluGonder();
   if (!secilenDosya) return;
   const btn = document.getElementById("gonderBtn");
   btn.disabled = true; hatayiGizle();
@@ -496,19 +567,67 @@ async function gonder() {
   }
 }
 
+// Fisler SIRAYLA gonderiliyor, paralel degil: sunucuda tek model ornegi var
+// ve es zamanli istekler GPU'da birbirini bekletmekten baska bir sey yapmiyor.
+// Sirali gitmek ayrica ilerlemeyi durust gosteriyor.
+async function topluGonder() {
+  const btn = document.getElementById("gonderBtn");
+  btn.disabled = true;
+  hatayiGizle();
+  document.getElementById("sonucKart").classList.add("gizli");
+  document.getElementById("kuyruk").classList.remove("gizli");
+
+  const durumlar = secilenDosyalar.map(() => ({}));
+  let basarili = 0, hatali = 0;
+
+  for (let i = 0; i < secilenDosyalar.length; i++) {
+    durumlar[i] = { durum: "isleniyor", bilgi: "…" };
+    kuyrugu_ciz(durumlar);
+
+    const basla = Date.now();
+    try {
+      const gonderilecek = await kucult(secilenDosyalar[i]);
+      const form = new FormData();
+      form.append("file", gonderilecek);
+      const cevap = await fetch("/analyze-invoice", { method: "POST", body: form });
+      if (!cevap.ok) throw new Error("HTTP " + cevap.status);
+      const s = await cevap.json();
+      basarili++;
+      durumlar[i] = {
+        durum: "bitti",
+        bilgi: (s.data.total_amount || "—") + " · " + ((Date.now() - basla) / 1000).toFixed(0) + " sn",
+      };
+    } catch (e) {
+      hatali++;
+      durumlar[i] = { durum: "hata", bilgi: e.message.slice(0, 24) };
+    }
+    kuyrugu_ciz(durumlar);
+    btn.textContent = (i + 1) + " / " + secilenDosyalar.length + " işlendi";
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Analiz Et";
+  durumuYenile();
+  if (hatali) hatayiGoster(hatali + " fiş işlenemedi, " + basarili + " tanesi kaydedildi.");
+  sekmeyeGec("kayit");
+}
+
 function sonucuGoster(s) {
   sonSonuc = s;
   const d = s.data || {};
 
-  const tutar = d.total_amount, tk = document.getElementById("tutarKutu");
-  if (tutar) { document.getElementById("tutarDeger").textContent = tutar; tk.classList.remove("gizli"); }
-  else tk.classList.add("gizli");
+  // Alanlar duzenlenebilir: model her seferinde dogru getirmiyor ve
+  // duzeltilen degerler ilerideki egitim icin etiketli veri biriktiriyor.
+  const tk = document.getElementById("tutarKutu");
+  document.getElementById("tutarDeger").value = d.total_amount || "";
+  tk.classList.remove("gizli");
 
   document.getElementById("sonucAlanlar").innerHTML = ALANLAR.map(([anahtar, etiket]) => {
-    const v = d[anahtar], bos = v === null || v === undefined || v === "";
+    const v = d[anahtar];
     return '<div class="satir"><div class="ad">' + etiket + "</div>" +
-           '<div class="deger' + (bos ? " bos" : "") + '">' +
-           (bos ? "—" : kacisli(v)) + "</div></div>";
+           '<input class="deger-giris" data-alan="' + anahtar + '" placeholder="—" ' +
+           'value="' + kacisli(v == null ? "" : v) + '" onchange="alaniKaydet(this)">' +
+           "</div>";
   }).join("");
 
   katSecimiDoldur(s.category, s.id);
@@ -596,6 +715,26 @@ function katSecimiDoldur(secili, kayitId) {
       '<option selected>' + kacisli(secili) + "</option>");
   }
   sec.classList.remove("gizli");
+}
+
+async function alaniKaydet(girdi) {
+  if (!acikKayitId) return;
+  const alan = girdi.dataset.alan;
+  const satir = girdi.closest(".satir");
+  try {
+    const c = await fetch("/faturalar/" + acikKayitId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [alan]: girdi.value }),
+    });
+    if (!c.ok) throw new Error("HTTP " + c.status);
+    if (satir) {
+      satir.classList.add("kaydedildi");
+      setTimeout(() => satir.classList.remove("kaydedildi"), 1200);
+    }
+  } catch (e) {
+    hatayiGoster("Kaydedilemedi: " + e.message);
+  }
 }
 
 async function kategoriDegistir() {

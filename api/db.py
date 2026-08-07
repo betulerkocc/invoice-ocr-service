@@ -154,9 +154,43 @@ def _donem_araligi(donem: str | None):
 
 def kategori_guncelle(kayit_id: int, kategori: str | None) -> bool:
     """Kaydin kategorisini degistirir. Kayit bulunduysa True doner."""
+    return kaydi_guncelle(kayit_id, {"category": kategori})
+
+
+# Elle duzeltilebilen alanlar. Beyaz liste bilerek: cagiran taraftan gelen
+# anahtar dogrudan SQL'e girdigi icin serbest birakmak sutun adi enjeksiyonuna
+# ve raw_text/olusturuldu gibi alanlarin ezilmesine yol acardi.
+DUZENLENEBILIR_ALANLAR = (
+    "company_name", "date", "address", "total_amount", "invoice_no",
+    "kdv", "category",
+)
+
+
+def kaydi_guncelle(kayit_id: int, alanlar: dict) -> bool:
+    """
+    Kaydin verilen alanlarini gunceller. Kayit bulunduysa True doner.
+
+    'date' degistiginde date_iso da yeniden hesaplaniyor; aksi halde donem
+    filtresi kaydi eski tarihe gore suzmeye devam ederdi.
+    """
+    guncellenecek = {
+        a: (v.strip() if isinstance(v, str) else v)
+        for a, v in alanlar.items()
+        if a in DUZENLENEBILIR_ALANLAR
+    }
+    # Bos birakilan alan "deger yok" demek; bos metin yerine NULL saklaniyor
+    guncellenecek = {a: (v or None) for a, v in guncellenecek.items()}
+    if not guncellenecek:
+        return False
+
+    if "date" in guncellenecek:
+        guncellenecek["date_iso"] = tarihi_iso_yap(guncellenecek["date"])
+
+    atamalar = ", ".join(f"{a} = ?" for a in guncellenecek)
     with _baglan() as conn:
         return conn.execute(
-            "UPDATE faturalar SET category = ? WHERE id = ?", (kategori, kayit_id)
+            f"UPDATE faturalar SET {atamalar} WHERE id = ?",
+            list(guncellenecek.values()) + [kayit_id],
         ).rowcount > 0
 
 
