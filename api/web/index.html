@@ -164,6 +164,19 @@
   .tutar-kutu .et { font-size:12px; color:var(--iyi); font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
   .tutar-kutu .dg { font-size:22px; font-weight:680; color:var(--iyi); letter-spacing:-.02em; }
 
+  .kat-rozet {
+    display:inline-flex; align-items:center; gap:6px; padding:5px 11px;
+    border-radius:99px; background:var(--vurgu-yumusak); color:var(--vurgu);
+    font-size:12.5px; font-weight:600; letter-spacing:-.004em;
+  }
+  .kat-satir { display:flex; align-items:center; gap:11px; padding:10px 0; border-top:1px solid var(--cizgi); }
+  .kat-satir:first-child { border-top:0; }
+  .kat-satir .ad { flex:0 0 auto; font-size:13.5px; font-weight:550; }
+  .kat-satir .cubuk { flex:1; height:6px; border-radius:99px; background:var(--cizgi); overflow:hidden; }
+  .kat-satir .dolu { height:100%; border-radius:99px; background:linear-gradient(90deg,var(--vurgu),var(--vurgu2,var(--vurgu))); }
+  .kat-satir .tut { flex:0 0 auto; font-size:13px; font-weight:600; white-space:nowrap; }
+  .kat-satir .adet { flex:0 0 auto; font-size:11.5px; color:var(--sonuk); min-width:34px; text-align:right; }
+
   .butonlar { display:flex; gap:8px; margin-top:14px; }
   .butonlar button {
     flex:1; padding:9.5px; border:1px solid var(--cizgi-koyu); background:transparent;
@@ -279,7 +292,10 @@
     </div>
 
     <div class="kart gizli" id="sonucKart">
-      <div class="baslik">Ayıklanan veriler</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px">
+        <div class="baslik" style="margin:0">Ayıklanan veriler</div>
+        <span class="kat-rozet gizli" id="katRozet"></span>
+      </div>
       <div class="tutar-kutu gizli" id="tutarKutu">
         <span class="et">Toplam</span><span class="dg sayi-hiza" id="tutarDeger"></span>
       </div>
@@ -300,7 +316,12 @@
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetAdet">—</div><div class="et">Kayıtlı fatura</div></div>
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetTutar">—</div><div class="et">Toplam tutar</div></div>
     </div>
+    <div class="kart gizli" id="katKart">
+      <div class="baslik">Kategoriye göre harcama</div>
+      <div id="katListe"></div>
+    </div>
     <div class="kart">
+      <div class="baslik">Son kayıtlar</div>
       <div id="kayitListe"><div class="bos-durum">Yükleniyor…</div></div>
     </div>
   </section>
@@ -435,6 +456,10 @@ function sonucuGoster(s) {
            (bos ? "—" : kacisli(v)) + "</div></div>";
   }).join("");
 
+  const kr = document.getElementById("katRozet");
+  if (s.category) { kr.textContent = s.category; kr.classList.remove("gizli"); }
+  else kr.classList.add("gizli");
+
   const m = s.meta || {}, p = [];
   if (m.ocr_seconds != null) p.push("OCR " + m.ocr_seconds + " sn");
   if (m.llm_seconds != null) p.push("LLM " + m.llm_seconds + " sn");
@@ -476,17 +501,47 @@ async function kayitlariYukle() {
       liste.innerHTML = '<div class="bos-durum"><div class="buyuk">◇</div>Henüz kayıt yok</div>';
       return;
     }
+    kategorileriCiz();
+
     liste.innerHTML = j.kayitlar.map(k => {
       const firma = k.company_name || "(firma yok)";
       const bas = firma.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü]/g, "").slice(0, 2).toUpperCase() || "?";
       return '<div class="kayit" onclick="kaydiAc(' + k.id + ')">' +
                '<div class="bas">' + kacisli(bas) + "</div>" +
                '<div class="orta"><div class="firma">' + kacisli(firma) + "</div>" +
-               '<div class="alt">' + kacisli(k.date || "tarihsiz") + " · #" + k.id + "</div></div>" +
+               '<div class="alt">' + (k.category ? kacisli(k.category) + " · " : "") +
+               kacisli(k.date || "tarihsiz") + " · #" + k.id + "</div></div>" +
                '<div class="tutar sayi-hiza">' + kacisli(k.total_amount || "—") + "</div></div>";
     }).join("");
   } catch (e) {
     liste.innerHTML = '<div class="bos-durum">Kayıtlar yüklenemedi</div>';
+  }
+}
+
+async function kategorileriCiz() {
+  const kart = document.getElementById("katKart");
+  const liste = document.getElementById("katListe");
+  try {
+    const j = await (await fetch("/kategoriler")).json();
+    const k = (j.kategoriler || []).filter(x => x.toplam > 0);
+    if (!k.length) { kart.classList.add("gizli"); return; }
+
+    // Cubuk uzunluklari en buyuk kategoriye gore olcekleniyor: mutlak degil
+    // goreli okunsun isteniyor - "en cok nereye harciyorum" sorusu bu.
+    const enBuyuk = Math.max(...k.map(x => x.toplam));
+    liste.innerHTML = k.map(x =>
+      '<div class="kat-satir">' +
+        '<span class="ad">' + kacisli(x.kategori) + "</span>" +
+        '<span class="cubuk"><span class="dolu" style="width:' +
+          Math.max(4, Math.round(x.toplam / enBuyuk * 100)) + '%"></span></span>' +
+        '<span class="tut sayi-hiza">' +
+          x.toplam.toLocaleString("tr-TR", {minimumFractionDigits:2, maximumFractionDigits:2}) +
+        "</span>" +
+        '<span class="adet">' + x.adet + " fiş</span>" +
+      "</div>").join("");
+    kart.classList.remove("gizli");
+  } catch (e) {
+    kart.classList.add("gizli");
   }
 }
 
@@ -499,6 +554,7 @@ async function kaydiAc(id) {
   document.getElementById("ilerleme").classList.add("gizli");
   sonucuGoster({
     id: k.id,
+    category: k.category,
     data: { company_name:k.company_name, date:k.date, address:k.address,
             total_amount:k.total_amount, invoice_no:k.invoice_no },
     raw_text: k.raw_text,

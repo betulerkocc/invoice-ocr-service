@@ -158,6 +158,12 @@ def faturalari_listele(limit: int = 50, offset: int = 0):
     return {"toplam": db.ozet()["adet"], "kayitlar": db.listele(limit, offset)}
 
 
+@app.get("/kategoriler")
+def kategori_ozeti():
+    """Kategori basina kayit sayisi ve harcama toplami."""
+    return {"kategoriler": db.kategori_ozeti()}
+
+
 @app.get("/faturalar/{kayit_id}")
 def fatura_getir(kayit_id: int):
     """Tek kaydi ham OCR metniyle birlikte dondurur."""
@@ -212,11 +218,23 @@ async def analyze_invoice(file: UploadFile = File(...)):
         "llm_seconds": round(llm_sure, 2) if llm_sure is not None else None,
     }
 
+    # Kategori ayri bir adim: ayiklama modelinin prompt'una dokunmuyoruz.
+    # Taninan bir zincir varsa anahtar kelimeyle bulunuyor, yoksa kisa bir
+    # LLM cagrisi yapiliyor. Basarisiz olursa analiz yine donuyor.
+    kategori = None
+    if extractor is not None:
+        try:
+            t0 = time.time()
+            kategori = extractor.siniflandir(data.get("company_name"), raw_text)
+            meta["kategori_seconds"] = round(time.time() - t0, 2)
+        except Exception as e:
+            print(f"[KATEGORI] siniflandirilamadi -> {e}")
+
     # Kayit basarisiz olsa bile sonucu dondurmeye devam ediyoruz: kullanicinin
     # elindeki analiz, veritabani hatasi yuzunden kaybolmasin.
     kayit_id, kayit_hatasi = None, None
     try:
-        kayit_id = db.kaydet(file.filename or "", data, raw_text, meta)
+        kayit_id = db.kaydet(file.filename or "", data, raw_text, meta, kategori)
     except Exception as e:
         kayit_hatasi = f"{type(e).__name__}: {e}"
         print(f"[DB] kaydedilemedi -> {kayit_hatasi}")
@@ -225,6 +243,7 @@ async def analyze_invoice(file: UploadFile = File(...)):
         "id": kayit_id,
         "filename": file.filename,
         "data": data,
+        "category": kategori,
         "raw_text": raw_text,  # Hata ayiklama icin: LLM mi yanlis anladi, OCR mi kotu okudu?
         "meta": {**meta, "kayit_hatasi": kayit_hatasi},
     }

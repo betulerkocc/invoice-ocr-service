@@ -356,6 +356,44 @@ class InvoiceExtractor:
         sonuc = _uydurmalari_ele(_extract_json(answer), raw_text)
         return _etiketli_alanlari_duzelt(sonuc, raw_text)
 
+    @torch.inference_mode()
+    def siniflandir(self, firma: str | None, raw_text: str) -> str:
+        """
+        Fisi gider kategorisine ayirir.
+
+        Once anahtar kelime deneniyor: taninan bir zincir varsa ("SHELL")
+        modeli calistirmaya gerek yok - hem kesin hem bedava. Kelime
+        tutmazsa kisa bir LLM cagrisi yapiliyor.
+
+        Ayiklama modelinin prompt'una dokunulmuyor; bu ayri bir cagri.
+        Sebebi llm/kategori.py'nin basinda anlatiliyor.
+        """
+        import kategori as kat
+
+        if not raw_text or not raw_text.strip():
+            return kat.VARSAYILAN
+
+        kelimeyle = kat.anahtar_kelimeyle_bul(firma or "", raw_text)
+        if kelimeyle:
+            return kelimeyle
+
+        prompt = self.tokenizer.apply_chat_template(
+            kat.build_messages(firma, raw_text),
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        output = self.model.generate(
+            **inputs,
+            max_new_tokens=12,  # tek kelimelik cevap; uzun uretim gereksiz yavaslik
+            do_sample=False,
+            pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+        )
+        cevap = self.tokenizer.decode(
+            output[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True
+        )
+        return kat.cevabi_esle(cevap)
+
 
 if __name__ == "__main__":
     ornek_ocr = """TAN WOON YANN
