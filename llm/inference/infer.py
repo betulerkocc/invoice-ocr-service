@@ -84,6 +84,15 @@ _TUTAR = re.compile(
 )
 
 
+# OCR ondalik ayiracindan sonra bosluk birakabiliyor: "35,10" -> "35, 10".
+# Bu iki ayri sayi gibi gorunup son parca ("10") tutar saniliyordu.
+#
+# Sondaki \b onemli: yalnizca 1-2 haneli bir sayi geliyorsa birlestiriyoruz.
+# Boylece "ANKARA, 06420" gibi adres parcalari ("06" sonrasi rakam devam
+# ediyor) ve "1.000 TL" gibi ifadeler etkilenmiyor.
+_AYRIK_ONDALIK = re.compile(r"([.,])\s+(\d{1,2})\b")
+
+
 def _tutar_bul(satir: str):
     """
     Satirdaki son tutari dondurur; yoksa None.
@@ -93,6 +102,7 @@ def _tutar_bul(satir: str):
     ("KDV %10 20,73") - bu yuzden satirin tamamini atmak yerine yalnizca
     yuzdeye ait sayiyi eliyoruz.
     """
+    satir = _AYRIK_ONDALIK.sub(r"\1\2", satir)
     adaylar = [
         m.group(0)
         for m in _TUTAR.finditer(satir)
@@ -187,6 +197,12 @@ _TURKCE_BELGE = re.compile(
 )
 
 
+# "Vergiler Dahil Toplam" / "KDV Dahil Toplam" genel toplamdir, KDV satiri
+# degil. Icinde "Vergi"/"KDV" gectigi icin eleme listesine takiliyordu;
+# "dahil" gecen satirlarda eleme uygulanmiyor.
+_TOPLAM_DAHIL = re.compile(r"DAH[İI]L", re.IGNORECASE)
+
+
 def _toplam_bul(raw_text: str):
     """
     Etiketiyle birlikte duran toplam tutari arar; bulamazsa None.
@@ -204,7 +220,9 @@ def _toplam_bul(raw_text: str):
     satirlar = raw_text.splitlines()
     adaylar = []
     for i, satir in enumerate(satirlar):
-        if not _TOPLAM_ETIKET.search(satir) or _TOPLAM_HARIC.search(satir):
+        if not _TOPLAM_ETIKET.search(satir):
+            continue
+        if _TOPLAM_HARIC.search(satir) and not _TOPLAM_DAHIL.search(satir):
             continue
         # Etiketin bir ustune de bakiyoruz: OCR fisin duzenini bozup degeri
         # etiketten once dokebiliyor. Olculen bir ornekte etiketin altindaki
@@ -224,6 +242,63 @@ def _toplam_bul(raw_text: str):
     # gibi tutar olmayan degerler oluyor.
     ondalikli = [a for a in adaylar if re.search(r"[.,]", a)]
     return max(ondalikli or adaylar, key=_tutari_sayiya_cevir)
+
+
+# "Toplam KDV"yi acikca soyleyen etiketler. Bunlar varsa dogrudan kullanilir.
+_KDV_TOPLAM_ETIKET = re.compile(
+    r"(TOP\s*KDV|TOPLAM\s*KDV|KDV\s*TUTARI|KDV\s*TOPLAMI|HESAPLANAN\s*KDV|"
+    r"TOPLAM\s*VERG[İI])",
+    re.IGNORECASE,
+)
+# Oran basina ayri yazilan KDV satirlari ("KDV %10  45,00")
+_KDV_ETIKET = re.compile(r"KDV", re.IGNORECASE)
+# KDV etiketi tasiyip da tutar icermeyen satirlar: oran sutunlari ve basliklar
+_KDV_HARIC = re.compile(r"(ORAN|RATE|MATRAH)", re.IGNORECASE)
+
+
+def _kdv_adaylari(raw_text: str, etiket) -> list:
+    """
+    Verilen etiketle eslesen satirlardan tutar toplar.
+
+    Geriye BAKILMIYOR (toplam tutarin aksine): KDV satirinin bir ustunde
+    genelde ara toplam duruyor ve geriye bakmak onu KDV sanmaya yol aciyor.
+    Ileri tararken baska bir etikete (TOPLAM gibi) rastlanirsa duruluyor.
+    """
+    satirlar = raw_text.splitlines()
+    adaylar = []
+    for i, satir in enumerate(satirlar):
+        if not etiket.search(satir) or _KDV_HARIC.search(satir):
+            continue
+        for j in range(i, min(i + 3, len(satirlar))):
+            if j > i and (_KDV_HARIC.search(satirlar[j])
+                          or _TOPLAM_ETIKET.search(satirlar[j])):
+                break  # baska bir kalemin alanina girdik
+            tutar = _tutar_bul(satirlar[j])
+            if tutar:
+                adaylar.append(tutar)
+                break
+    return adaylar
+
+
+def _kdv_bul(raw_text: str):
+    """
+    Fisteki KDV tutarini arar; bulamazsa None.
+
+    Once "TOPKDV / TOPLAM KDV / HESAPLANAN KDV" gibi toplami acikca soyleyen
+    etiketler deneniyor. Bulunamazsa oran basina yazilmis KDV satirlarina
+    ("KDV %10  45,00") bakiliyor ve en buyugu aliniyor.
+
+    Sinir: birden fazla oranin ayri ayri yazildigi ve toplamin hic
+    yazilmadigi fislerde en buyuk satir donuyor, satirlarin toplami degil.
+    Bu belgeler nadir; toplami kendimiz hesaplamak, OCR bir satiri yanlis
+    okudugunda sessizce yanlis bir vergi tutari uretme riski tasiyor.
+    """
+    for etiket in (_KDV_TOPLAM_ETIKET, _KDV_ETIKET):
+        adaylar = _kdv_adaylari(raw_text, etiket)
+        if adaylar:
+            ondalikli = [a for a in adaylar if re.search(r"[.,]", a)]
+            return max(ondalikli or adaylar, key=_tutari_sayiya_cevir)
+    return None
 
 
 def _belge_no_bul(raw_text: str):
@@ -275,6 +350,11 @@ def _etiketli_alanlari_duzelt(sonuc: dict, raw_text: str) -> dict:
         tarih = _tarih_bul(raw_text)
         if tarih:
             sonuc["date"] = tarih
+
+    # KDV modelden istenmiyor: prompt'a altinci alan eklemek egitim/calisma
+    # uyumunu bozardi (bkz. llm/prompt.py). Fiste acik etiketi oldugu icin
+    # kuralla cikariliyor.
+    sonuc["kdv"] = _kdv_bul(raw_text)
 
     return sonuc
 

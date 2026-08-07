@@ -51,6 +51,9 @@ SONRADAN_EKLENEN_SUTUNLAR = [
     # veriyi bozmadan saklamak istiyoruz; ama o bicimde tarih araligi
     # sorgulanamiyor. Bu sutun yalnizca filtreleme icin.
     ("date_iso", "TEXT"),
+    # KDV tutari. Modelden istenmiyor, kural katmani cikariyor
+    # (fiste acik etiketi var). Belgede nasil yaziyorsa oyle saklaniyor.
+    ("kdv", "TEXT"),
 ]
 
 _db_yolu = os.path.abspath(VARSAYILAN_YOL)
@@ -165,8 +168,8 @@ def kaydet(dosya_adi: str, veri: dict, raw_text: str, meta: dict,
             """INSERT INTO faturalar
                (olusturuldu, dosya_adi, company_name, date, address,
                 total_amount, invoice_no, raw_text, ocr_saniye, llm_saniye,
-                llm_kullanildi, category, date_iso)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                llm_kullanildi, category, date_iso, kdv)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 dosya_adi,
@@ -181,6 +184,7 @@ def kaydet(dosya_adi: str, veri: dict, raw_text: str, meta: dict,
                 1 if meta.get("llm_used") else 0,
                 kategori,
                 tarihi_iso_yap(veri.get("date")),
+                veri.get("kdv"),
             ),
         )
         return imlec.lastrowid
@@ -210,7 +214,7 @@ def listele(limit: int = 50, offset: int = 0, donem: str | None = None) -> list:
     with _baglan() as conn:
         satirlar = conn.execute(
             """SELECT id, olusturuldu, dosya_adi, company_name, date, date_iso,
-                      address, total_amount, invoice_no, category,
+                      address, total_amount, kdv, invoice_no, category,
                       ocr_saniye, llm_saniye
                FROM faturalar""" + kosul +
             " ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -266,6 +270,19 @@ def kategori_ozeti(donem: str | None = None) -> list:
             g["toplam"] += _tutari_sayiya_cevir(s["total_amount"])
 
     return sorted(gruplar.values(), key=lambda g: g["toplam"], reverse=True)
+
+
+def disa_aktarim_satirlari(donem: str | None = None) -> list:
+    """CSV icin kayitlari eskiden yeniye dogru dondurur (muhasebe sirasi)."""
+    kosul, parametreler = _donem_kosulu(donem)
+    with _baglan() as conn:
+        satirlar = conn.execute(
+            """SELECT id, date, date_iso, company_name, invoice_no, total_amount,
+                      kdv, category, address, olusturuldu
+               FROM faturalar""" + kosul + " ORDER BY COALESCE(date_iso, olusturuldu), id",
+            parametreler,
+        ).fetchall()
+        return [dict(s) for s in satirlar]
 
 
 def ozet(donem: str | None = None) -> dict:

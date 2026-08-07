@@ -148,6 +148,20 @@
   @keyframes don { to { transform:rotate(360deg); } }
   .sure { margin-left:auto; font-size:12px; color:var(--sonuk); }
 
+  .cubuk-dis {
+    height:5px; border-radius:99px; background:var(--cizgi);
+    overflow:hidden; margin-top:12px;
+  }
+  .cubuk-ic {
+    height:100%; width:0; border-radius:99px; background:var(--vurgu);
+    transition:width .3s linear;
+  }
+  .disa-aktar {
+    display:block; width:100%; text-align:center; padding:11px;
+    border:1px solid var(--cizgi-koyu); border-radius:11px; margin-bottom:13px;
+    font-size:13.5px; font-weight:550; color:var(--metin); text-decoration:none;
+  }
+
   /* ---------- sonuc ---------- */
   .satir { display:flex; gap:14px; padding:11px 0; border-top:1px solid var(--cizgi); }
   .satir:first-of-type { border-top:0; padding-top:0; }
@@ -307,6 +321,7 @@
           <div class="kutu" id="kutuLlm">2</div>
           <span>Alanlar ayıklanıyor</span><span class="sure sayi-hiza" id="sureLlm"></span>
         </div>
+        <div class="cubuk-dis"><div class="cubuk-ic" id="cubuk"></div></div>
       </div>
 
       <div id="hata" class="uyari gizli"></div>
@@ -344,6 +359,7 @@
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetAdet">—</div><div class="et">Kayıtlı fatura</div></div>
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetTutar">—</div><div class="et">Toplam tutar</div></div>
     </div>
+    <a class="disa-aktar" id="disaAktar" href="/disa-aktar" download>CSV indir (muhasebeci için)</a>
     <div class="kart gizli" id="katKart">
       <div class="baslik">Kategoriye göre harcama</div>
       <div id="katListe"></div>
@@ -360,6 +376,7 @@ const ALANLAR = [
   ["company_name", "Firma"],
   ["date",         "Tarih"],
   ["invoice_no",   "Fatura no"],
+  ["kdv",          "KDV"],
   ["address",      "Adres"],
 ];
 
@@ -441,8 +458,17 @@ async function gonder() {
   // surebiliyor ve sabit bir cark kullaniciya "dondu mu" hissi veriyor.
   adimDurum("Ocr", "calisiyor"); adimDurum("Llm", "");
   const basla = Date.now();
+  const cubuk = document.getElementById("cubuk");
+  cubuk.style.width = "0";
+
+  // Sunucu ara ilerleme bildirmiyor, gercek yuzde bilinemiyor. Cubuk gecen
+  // sureyi tahmini toplam sureye oranliyor ve %92'de bekliyor: dolu gorunup
+  // sonra beklemeye devam etmek, hic dolmamaktan daha rahatsiz edici.
+  const TAHMINI_SN = 20;
   const sayac = setInterval(() => {
-    document.getElementById("sureOcr").textContent = ((Date.now() - basla) / 1000).toFixed(0) + " sn";
+    const gecen = (Date.now() - basla) / 1000;
+    document.getElementById("sureOcr").textContent = gecen.toFixed(0) + " sn";
+    cubuk.style.width = Math.min(92, (gecen / TAHMINI_SN) * 100).toFixed(1) + "%";
   }, 200);
 
   try {
@@ -457,6 +483,7 @@ async function gonder() {
     }
     const s = await cevap.json();
     clearInterval(sayac);
+    cubuk.style.width = "100%";
     adimDurum("Ocr", "bitti", (s.meta.ocr_seconds ?? "—") + " sn");
     adimDurum("Llm", "bitti", (s.meta.llm_seconds ?? "—") + " sn");
     sonucuGoster(s);
@@ -590,6 +617,7 @@ async function kategoriDegistir() {
 
 function donemSec(donem, dugme) {
   aktifDonem = donem;
+  document.getElementById("disaAktar").href = "/disa-aktar?donem=" + donem;
   document.querySelectorAll("#donemler button").forEach(b => b.classList.remove("aktif"));
   dugme.classList.add("aktif");
   kayitlariYukle();
@@ -647,7 +675,7 @@ async function kaydiAc(id) {
     id: k.id,
     category: k.category,
     data: { company_name:k.company_name, date:k.date, address:k.address,
-            total_amount:k.total_amount, invoice_no:k.invoice_no },
+            total_amount:k.total_amount, invoice_no:k.invoice_no, kdv:k.kdv },
     raw_text: k.raw_text,
     meta: { ocr_seconds:k.ocr_saniye, llm_seconds:k.llm_saniye },
   });

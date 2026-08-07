@@ -12,6 +12,8 @@ Ayarlar ortam degiskenleri (ya da .env dosyasi) ile verilir:
     OCR_LANG      = en
 """
 
+import csv
+import io
 import os
 import shutil
 import sys
@@ -21,7 +23,7 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _BASE_DIR)  # db.py bu klasorde
@@ -172,6 +174,54 @@ def faturalari_listele(limit: int = 50, offset: int = 0, donem: str | None = Non
 def kategori_ozeti(donem: str | None = None):
     """Kategori basina kayit sayisi ve harcama toplami."""
     return {"donem": donem or "tumu", "kategoriler": db.kategori_ozeti(donem)}
+
+
+@app.get("/disa-aktar")
+def disa_aktar(donem: str | None = None):
+    """
+    Kayitlari CSV olarak dondurur (muhasebeciye gonderilecek dosya).
+
+    Bicim kararlari, dosyanin Turkiye'de Excel ile acilacagi varsayimiyla:
+      - Ayirac noktali virgul. Turkce Excel virgulu ONDALIK ayiraci sayiyor;
+        virgulle ayrilmis bir dosyada "82,55" iki hucreye bolunurdu.
+      - Dosya BOM ile basliyor. Onsuz Excel dosyayi UTF-8 saymiyor ve
+        Turkce karakterler bozuk goruniyor.
+      - Tutarlar belgede nasil yaziyorsa oyle yaziliyor; ayrica sayiya
+        cevrilmis bir sutun da var ki Excel'de toplam alinabilsin.
+    """
+    satirlar = db.disa_aktarim_satirlari(donem)
+
+    from infer import _tutari_sayiya_cevir
+
+    tampon = io.StringIO()
+    # csv.writer satir sonu olarak varsayilan \r\n kullaniyor; Excel bunu bekliyor.
+    yazici = csv.writer(tampon, delimiter=";")
+    yazici.writerow([
+        "Kayit No", "Belge Tarihi", "Firma", "Belge No",
+        "Tutar", "Tutar (sayi)", "KDV", "KDV (sayi)",
+        "Kategori", "Adres", "Kayit Zamani",
+    ])
+    for k in satirlar:
+        yazici.writerow([
+            k["id"],
+            k["date"] or "",
+            k["company_name"] or "",
+            k["invoice_no"] or "",
+            k["total_amount"] or "",
+            f"{_tutari_sayiya_cevir(k['total_amount']):.2f}".replace(".", ",") if k["total_amount"] else "",
+            k["kdv"] or "",
+            f"{_tutari_sayiya_cevir(k['kdv']):.2f}".replace(".", ",") if k["kdv"] else "",
+            k["category"] or "",
+            " ".join((k["address"] or "").split()),  # adres cok satirli olabilir
+            (k["olusturuldu"] or "")[:10],
+        ])
+
+    ad = f"faturalar-{donem or 'tumu'}.csv"
+    return Response(
+        content="﻿" + tampon.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{ad}"'},
+    )
 
 
 @app.get("/kategori-listesi")
