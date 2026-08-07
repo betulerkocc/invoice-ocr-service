@@ -215,6 +215,13 @@
   .kayit .alt { font-size:12px; color:var(--sonuk); margin-top:1px; }
   .kayit .tutar { font-weight:600; font-size:14px; white-space:nowrap; letter-spacing:-.01em; }
 
+  .kayit .sil {
+    flex:0 0 auto; width:28px; height:28px; border:0; border-radius:8px;
+    background:transparent; color:var(--sonuk); font-size:16px; cursor:pointer;
+    line-height:1; transition:background .16s,color .16s;
+  }
+  .kayit .sil:active { background:var(--kotu-bg); color:var(--kotu); }
+
   .bos-durum { text-align:center; padding:32px 16px; color:var(--sonuk); font-size:13.5px; }
   .bos-durum .buyuk { font-size:30px; opacity:.4; margin-bottom:8px; }
   .uyari { padding:11px 13px; border-radius:10px; background:var(--kotu-bg); color:var(--kotu); font-size:13px; margin-top:11px; }
@@ -511,10 +518,26 @@ async function kayitlariYukle() {
                '<div class="orta"><div class="firma">' + kacisli(firma) + "</div>" +
                '<div class="alt">' + (k.category ? kacisli(k.category) + " · " : "") +
                kacisli(k.date || "tarihsiz") + " · #" + k.id + "</div></div>" +
-               '<div class="tutar sayi-hiza">' + kacisli(k.total_amount || "—") + "</div></div>";
+               '<div class="tutar sayi-hiza">' + kacisli(k.total_amount || "—") + "</div>" +
+               '<button class="sil" onclick="kaydiSil(event,' + k.id + ')" title="Sil">×</button>' +
+               "</div>";
     }).join("");
   } catch (e) {
     liste.innerHTML = '<div class="bos-durum">Kayıtlar yüklenemedi</div>';
+  }
+}
+
+async function kaydiSil(olay, id) {
+  // Satira tiklamak kaydi aciyor; silme dugmesi o davranisi tetiklemesin.
+  olay.stopPropagation();
+  if (!confirm("#" + id + " numarali kayit silinsin mi?")) return;
+  try {
+    const c = await fetch("/faturalar/" + id, { method: "DELETE" });
+    if (!c.ok) throw new Error("HTTP " + c.status);
+    kayitlariYukle();
+    durumuYenile();
+  } catch (e) {
+    alert("Silinemedi: " + e.message);
   }
 }
 

@@ -206,16 +206,24 @@ def _toplam_bul(raw_text: str):
     for i, satir in enumerate(satirlar):
         if not _TOPLAM_ETIKET.search(satir) or _TOPLAM_HARIC.search(satir):
             continue
-        for j in range(i, min(i + 3, len(satirlar))):
-            if j > i and _TOPLAM_HARIC.search(satirlar[j]):
-                break  # araya baska bir kalem girdiyse dur
+        # Etiketin bir ustune de bakiyoruz: OCR fisin duzenini bozup degeri
+        # etiketten once dokebiliyor. Olculen bir ornekte etiketin altindaki
+        # "×82,55" satiri "55" olarak okunmustu; dogru deger bir ust satirda
+        # saglam duruyordu.
+        for j in range(max(0, i - 1), min(i + 3, len(satirlar))):
+            if j != i and _TOPLAM_HARIC.search(satirlar[j]):
+                continue  # baska bir kalemin (KDV, iskonto) degeri
             tutar = _tutar_bul(satirlar[j])
             if tutar:
                 adaylar.append(tutar)
-                break
     if not adaylar:
         return None
-    return max(adaylar, key=_tutari_sayiya_cevir)
+
+    # Ondalik/binlik ayiraci olanlar tercih ediliyor. Ciplak tamsayilar
+    # genelde OCR'in kirptigi parcalar ("82,55" -> "55") ya da adet/oran
+    # gibi tutar olmayan degerler oluyor.
+    ondalikli = [a for a in adaylar if re.search(r"[.,]", a)]
+    return max(ondalikli or adaylar, key=_tutari_sayiya_cevir)
 
 
 def _belge_no_bul(raw_text: str):
