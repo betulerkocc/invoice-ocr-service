@@ -164,6 +164,20 @@
   .tutar-kutu .et { font-size:12px; color:var(--iyi); font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
   .tutar-kutu .dg { font-size:22px; font-weight:680; color:var(--iyi); letter-spacing:-.02em; }
 
+  .donemler { display:flex; gap:5px; margin-bottom:13px; overflow-x:auto; padding-bottom:2px; }
+  .donemler button {
+    flex:0 0 auto; padding:6px 13px; border:1px solid var(--cizgi-koyu);
+    background:transparent; color:var(--soluk); border-radius:99px;
+    font:inherit; font-size:12.5px; font-weight:550; cursor:pointer; white-space:nowrap;
+  }
+  .donemler button.aktif { background:var(--vurgu); border-color:var(--vurgu); color:var(--vurgu-metin); }
+
+  select.kat-sec {
+    border:0; border-radius:99px; padding:5px 11px; font:inherit; font-size:12.5px;
+    font-weight:600; background:var(--vurgu-yumusak); color:var(--vurgu);
+    cursor:pointer; -webkit-appearance:none; appearance:none; text-align:center;
+  }
+
   .kat-rozet {
     display:inline-flex; align-items:center; gap:6px; padding:5px 11px;
     border-radius:99px; background:var(--vurgu-yumusak); color:var(--vurgu);
@@ -301,7 +315,7 @@
     <div class="kart gizli" id="sonucKart">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px">
         <div class="baslik" style="margin:0">Ayıklanan veriler</div>
-        <span class="kat-rozet gizli" id="katRozet"></span>
+        <select class="kat-sec gizli" id="katSec" onchange="kategoriDegistir()"></select>
       </div>
       <div class="tutar-kutu gizli" id="tutarKutu">
         <span class="et">Toplam</span><span class="dg sayi-hiza" id="tutarDeger"></span>
@@ -319,6 +333,13 @@
   </section>
 
   <section id="bolumKayit" class="gizli">
+    <div class="donemler" id="donemler">
+      <button class="aktif" onclick="donemSec('tumu',this)">Tümü</button>
+      <button onclick="donemSec('bu_ay',this)">Bu ay</button>
+      <button onclick="donemSec('gecen_ay',this)">Geçen ay</button>
+      <button onclick="donemSec('son_30_gun',this)">Son 30 gün</button>
+      <button onclick="donemSec('bu_yil',this)">Bu yıl</button>
+    </div>
     <div class="ozet">
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetAdet">—</div><div class="et">Kayıtlı fatura</div></div>
       <div class="hucre"><div class="sayi sayi-hiza" id="ozetTutar">—</div><div class="et">Toplam tutar</div></div>
@@ -463,9 +484,7 @@ function sonucuGoster(s) {
            (bos ? "—" : kacisli(v)) + "</div></div>";
   }).join("");
 
-  const kr = document.getElementById("katRozet");
-  if (s.category) { kr.textContent = s.category; kr.classList.remove("gizli"); }
-  else kr.classList.add("gizli");
+  katSecimiDoldur(s.category, s.id);
 
   const m = s.meta || {}, p = [];
   if (m.ocr_seconds != null) p.push("OCR " + m.ocr_seconds + " sn");
@@ -498,7 +517,7 @@ function tutariSayiyaCevir(s) {
 async function kayitlariYukle() {
   const liste = document.getElementById("kayitListe");
   try {
-    const j = await (await fetch("/faturalar?limit=100")).json();
+    const j = await (await fetch("/faturalar?limit=100&donem=" + aktifDonem)).json();
     document.getElementById("ozetAdet").textContent = j.toplam;
     document.getElementById("ozetTutar").textContent =
       j.kayitlar.reduce((t, k) => t + tutariSayiyaCevir(k.total_amount), 0)
@@ -527,6 +546,55 @@ async function kayitlariYukle() {
   }
 }
 
+let KATEGORILER = [];
+let acikKayitId = null;
+let aktifDonem = "tumu";
+
+async function kategorileriYukle() {
+  try {
+    KATEGORILER = (await (await fetch("/kategori-listesi")).json()).kategoriler || [];
+  } catch (e) { KATEGORILER = []; }
+}
+
+function katSecimiDoldur(secili, kayitId) {
+  const sec = document.getElementById("katSec");
+  acikKayitId = kayitId || null;
+  if (!secili && !KATEGORILER.length) { sec.classList.add("gizli"); return; }
+
+  sec.innerHTML = KATEGORILER.map(k =>
+    '<option value="' + kacisli(k) + '"' + (k === secili ? " selected" : "") + ">" +
+    kacisli(k) + "</option>").join("");
+  if (secili && !KATEGORILER.includes(secili)) {
+    sec.insertAdjacentHTML("afterbegin",
+      '<option selected>' + kacisli(secili) + "</option>");
+  }
+  sec.classList.remove("gizli");
+}
+
+async function kategoriDegistir() {
+  const sec = document.getElementById("katSec");
+  if (!acikKayitId) return;
+  try {
+    const c = await fetch("/faturalar/" + acikKayitId + "/kategori", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kategori: sec.value }),
+    });
+    if (!c.ok) throw new Error("HTTP " + c.status);
+    sec.style.opacity = "0.5";
+    setTimeout(() => (sec.style.opacity = ""), 400);
+  } catch (e) {
+    hatayiGoster("Kategori değiştirilemedi: " + e.message);
+  }
+}
+
+function donemSec(donem, dugme) {
+  aktifDonem = donem;
+  document.querySelectorAll("#donemler button").forEach(b => b.classList.remove("aktif"));
+  dugme.classList.add("aktif");
+  kayitlariYukle();
+}
+
 async function kaydiSil(olay, id) {
   // Satira tiklamak kaydi aciyor; silme dugmesi o davranisi tetiklemesin.
   olay.stopPropagation();
@@ -545,7 +613,7 @@ async function kategorileriCiz() {
   const kart = document.getElementById("katKart");
   const liste = document.getElementById("katListe");
   try {
-    const j = await (await fetch("/kategoriler")).json();
+    const j = await (await fetch("/kategoriler?donem=" + aktifDonem)).json();
     const k = (j.kategoriler || []).filter(x => x.toplam > 0);
     if (!k.length) { kart.classList.add("gizli"); return; }
 
@@ -604,6 +672,7 @@ function kacisli(s) {
     ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
+kategorileriYukle();
 durumuYenile();
 setInterval(durumuYenile, 30000);
 </script>

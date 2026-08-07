@@ -14,8 +14,9 @@ icin bu pratikte sorun degil.
 
 import json
 import os
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 VARSAYILAN_YOL = os.path.join(os.path.dirname(__file__), "..", "data", "faturalar.db")
 
@@ -45,6 +46,11 @@ CREATE INDEX IF NOT EXISTS idx_faturalar_olusturuldu ON faturalar(olusturuldu DE
 # eklenmesi gereken sutunlar. hazirla() bunlari eksikse ekliyor.
 SONRADAN_EKLENEN_SUTUNLAR = [
     ("category", "TEXT"),
+    # Belge tarihinin YYYY-AA-GG hali. 'date' sutunu belgede nasil yaziyorsa
+    # oyle korunuyor (30.01.2022 / 25/12/2018 / 2024-12-31) cunku kaynak
+    # veriyi bozmadan saklamak istiyoruz; ama o bicimde tarih araligi
+    # sorgulanamiyor. Bu sutun yalnizca filtreleme icin.
+    ("date_iso", "TEXT"),
 ]
 
 _db_yolu = os.path.abspath(VARSAYILAN_YOL)
@@ -86,6 +92,71 @@ def hazirla():
                 print(f"[DB] sutun eklendi: {sutun}")
 
 
+_TARIH_DESENLERI = [
+    # (desen, gun/ay/yil sirasi)
+    (re.compile(r"^(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})$"), ("g", "a", "y")),
+    (re.compile(r"^(\d{1,2})[./\-](\d{1,2})[./\-](\d{2})$"), ("g", "a", "y2")),
+    (re.compile(r"^(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})$"), ("y", "a", "g")),
+]
+
+
+def tarihi_iso_yap(tarih: str | None):
+    """
+    Belgedeki tarihi YYYY-AA-GG bicimine cevirir; cozulemezse None.
+
+    Gun-ay sirasi belirsiz durumlarda (05.08.2026) Turkce/Avrupa duzeni
+    varsayiliyor: gun once. SROIE de ayni duzeni kullaniyor (25/12/2018),
+    yani iki veri kaynagimiz da uyumlu.
+    """
+    if not tarih:
+        return None
+    t = str(tarih).strip()
+    for desen, sira in _TARIH_DESENLERI:
+        m = desen.match(t)
+        if not m:
+            continue
+        parcalar = dict(zip(sira, m.groups()))
+        try:
+            yil = int(parcalar.get("y") or 0)
+            if "y2" in parcalar:  # iki haneli yil -> 2000'li varsayiliyor
+                yil = 2000 + int(parcalar["y2"])
+            ay, gun = int(parcalar["a"]), int(parcalar["g"])
+            if not (1 <= ay <= 12 and 1 <= gun <= 31 and 1900 <= yil <= 2100):
+                return None
+            return f"{yil:04d}-{ay:02d}-{gun:02d}"
+        except (ValueError, KeyError):
+            return None
+    return None
+
+
+def _donem_araligi(donem: str | None):
+    """Donem adini (baslangic, bitis) ISO tarih ciftine cevirir."""
+    if not donem or donem == "tumu":
+        return None, None
+
+    bugun = datetime.now().date()
+    if donem == "bu_ay":
+        bas = bugun.replace(day=1)
+        return bas.isoformat(), bugun.isoformat()
+    if donem == "gecen_ay":
+        bu_ayin_basi = bugun.replace(day=1)
+        gecen_ayin_sonu = bu_ayin_basi - timedelta(days=1)
+        return gecen_ayin_sonu.replace(day=1).isoformat(), gecen_ayin_sonu.isoformat()
+    if donem == "son_30_gun":
+        return (bugun - timedelta(days=30)).isoformat(), bugun.isoformat()
+    if donem == "bu_yil":
+        return bugun.replace(month=1, day=1).isoformat(), bugun.isoformat()
+    return None, None
+
+
+def kategori_guncelle(kayit_id: int, kategori: str | None) -> bool:
+    """Kaydin kategorisini degistirir. Kayit bulunduysa True doner."""
+    with _baglan() as conn:
+        return conn.execute(
+            "UPDATE faturalar SET category = ? WHERE id = ?", (kategori, kayit_id)
+        ).rowcount > 0
+
+
 def kaydet(dosya_adi: str, veri: dict, raw_text: str, meta: dict,
            kategori: str | None = None) -> int:
     """Bir fatura sonucunu kaydeder ve olusan kaydin id'sini dondurur."""
@@ -94,8 +165,8 @@ def kaydet(dosya_adi: str, veri: dict, raw_text: str, meta: dict,
             """INSERT INTO faturalar
                (olusturuldu, dosya_adi, company_name, date, address,
                 total_amount, invoice_no, raw_text, ocr_saniye, llm_saniye,
-                llm_kullanildi, category)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                llm_kullanildi, category, date_iso)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 dosya_adi,
@@ -109,19 +180,41 @@ def kaydet(dosya_adi: str, veri: dict, raw_text: str, meta: dict,
                 meta.get("llm_seconds"),
                 1 if meta.get("llm_used") else 0,
                 kategori,
+                tarihi_iso_yap(veri.get("date")),
             ),
         )
         return imlec.lastrowid
 
 
-def listele(limit: int = 50, offset: int = 0) -> list:
+def _donem_kosulu(donem: str | None):
+    """
+    Donem filtresi icin (SQL parcasi, parametreler) uretir.
+
+    Belge tarihi cozulemeyen kayitlar (date_iso NULL) kayit zamanina gore
+    degerlendiriliyor: filtre disinda birakmak, o faturayi kullanicidan
+    tamamen gizlerdi.
+    """
+    bas, bit = _donem_araligi(donem)
+    if not bas:
+        return "", []
+    return (
+        " WHERE (date_iso BETWEEN ? AND ?)"
+        "    OR (date_iso IS NULL AND substr(olusturuldu,1,10) BETWEEN ? AND ?)",
+        [bas, bit, bas, bit],
+    )
+
+
+def listele(limit: int = 50, offset: int = 0, donem: str | None = None) -> list:
     """Kayitlari yeniden eskiye dogru dondurur. raw_text dahil edilmez."""
+    kosul, parametreler = _donem_kosulu(donem)
     with _baglan() as conn:
         satirlar = conn.execute(
-            """SELECT id, olusturuldu, dosya_adi, company_name, date, address,
-                      total_amount, invoice_no, category, ocr_saniye, llm_saniye
-               FROM faturalar ORDER BY id DESC LIMIT ? OFFSET ?""",
-            (limit, offset),
+            """SELECT id, olusturuldu, dosya_adi, company_name, date, date_iso,
+                      address, total_amount, invoice_no, category,
+                      ocr_saniye, llm_saniye
+               FROM faturalar""" + kosul +
+            " ORDER BY id DESC LIMIT ? OFFSET ?",
+            parametreler + [limit, offset],
         ).fetchall()
         return [dict(s) for s in satirlar]
 
@@ -143,7 +236,7 @@ def sil(kayit_id: int) -> bool:
         ).rowcount > 0
 
 
-def kategori_ozeti() -> list:
+def kategori_ozeti(donem: str | None = None) -> list:
     """
     Kategori basina kayit sayisi ve harcama toplami.
 
@@ -158,9 +251,10 @@ def kategori_ozeti() -> list:
     sys.path.append(os.path.join(os.path.dirname(__file__), "..", "llm", "inference"))
     from infer import _tutari_sayiya_cevir
 
+    kosul, parametreler = _donem_kosulu(donem)
     with _baglan() as conn:
         satirlar = conn.execute(
-            "SELECT category, total_amount FROM faturalar"
+            "SELECT category, total_amount FROM faturalar" + kosul, parametreler
         ).fetchall()
 
     gruplar = {}
@@ -174,11 +268,13 @@ def kategori_ozeti() -> list:
     return sorted(gruplar.values(), key=lambda g: g["toplam"], reverse=True)
 
 
-def ozet() -> dict:
+def ozet(donem: str | None = None) -> dict:
     """Toplam kayit sayisi ve son kayit zamani."""
+    kosul, parametreler = _donem_kosulu(donem)
     with _baglan() as conn:
         satir = conn.execute(
-            "SELECT COUNT(*) AS adet, MAX(olusturuldu) AS son FROM faturalar"
+            "SELECT COUNT(*) AS adet, MAX(olusturuldu) AS son FROM faturalar" + kosul,
+            parametreler,
         ).fetchone()
         return {"adet": satir["adet"], "son_kayit": satir["son"]}
 

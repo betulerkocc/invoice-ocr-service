@@ -20,7 +20,7 @@ import time
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -153,15 +153,54 @@ def health_check():
 
 
 @app.get("/faturalar")
-def faturalari_listele(limit: int = 50, offset: int = 0):
-    """Kaydedilmis faturalari yeniden eskiye dogru dondurur."""
-    return {"toplam": db.ozet()["adet"], "kayitlar": db.listele(limit, offset)}
+def faturalari_listele(limit: int = 50, offset: int = 0, donem: str | None = None):
+    """
+    Kaydedilmis faturalari yeniden eskiye dogru dondurur.
+
+    donem: tumu | bu_ay | gecen_ay | son_30_gun | bu_yil
+    Filtre belge tarihine gore calisiyor (kayit zamanina degil): muhasebede
+    onemli olan fisin uzerindeki tarih.
+    """
+    return {
+        "toplam": db.ozet(donem)["adet"],
+        "donem": donem or "tumu",
+        "kayitlar": db.listele(limit, offset, donem),
+    }
 
 
 @app.get("/kategoriler")
-def kategori_ozeti():
+def kategori_ozeti(donem: str | None = None):
     """Kategori basina kayit sayisi ve harcama toplami."""
-    return {"kategoriler": db.kategori_ozeti()}
+    return {"donem": donem or "tumu", "kategoriler": db.kategori_ozeti(donem)}
+
+
+@app.get("/kategori-listesi")
+def kategori_listesi():
+    """Arayuzun secim kutusunu doldurmasi icin gecerli kategoriler."""
+    import kategori as kat
+
+    return {"kategoriler": kat.KATEGORILER}
+
+
+@app.patch("/faturalar/{kayit_id}/kategori")
+def kategori_degistir(kayit_id: int, kategori: str = Body(..., embed=True)):
+    """
+    Kaydin kategorisini elle degistirir.
+
+    Yalnizca gecerli kategoriler kabul ediliyor: serbest metne izin vermek
+    kategori dokumunu zamanla birbirinin ayni ama farkli yazilmis
+    ("market", "Market ", "MARKET") kayitlarla doldururdu.
+    """
+    import kategori as kat
+
+    if kategori not in kat.KATEGORILER:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Gecersiz kategori. Gecerliler: {', '.join(kat.KATEGORILER)}",
+        )
+    if not db.kategori_guncelle(kayit_id, kategori):
+        raise HTTPException(status_code=404, detail="Kayit bulunamadi")
+    return {"id": kayit_id, "kategori": kategori}
 
 
 @app.get("/faturalar/{kayit_id}")
