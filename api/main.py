@@ -84,6 +84,41 @@ def _flag(name: str, default: str = "0") -> bool:
     return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _yerel_adresleri_yaz(port: int = 8000):
+    """
+    Servisin telefondan erisilebilecegi adresleri ekrana basar.
+
+    Makinenin IP'si ag degistikce degisiyor (hotspot, ev wifi'si, kampus
+    agi hepsi baska adres veriyor) ve her seferinde ipconfig'e bakmak
+    gerekiyordu. Acilista yazdirmak bu adimi ortadan kaldiriyor.
+
+    Sanal adaptorler (WSL, VirtualBox) eleniyor: onlar telefondan
+    erisilemeyen ic aglar ve listeyi kalabaliklastiriyorlar.
+    """
+    import socket
+
+    adresler = []
+    try:
+        for bilgi in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = bilgi[4][0]
+            if ip.startswith(("127.", "169.254.")):
+                continue
+            # Yaygin sanal adaptor araliklari
+            if ip.startswith(("172.25.", "192.168.56.", "172.17.", "172.18.")):
+                continue
+            if ip not in adresler:
+                adresler.append(ip)
+    except OSError:
+        pass
+
+    print(f"[AG] bilgisayardan : http://127.0.0.1:{port}")
+    for ip in adresler:
+        print(f"[AG] telefondan    : http://{ip}:{port}")
+    if not adresler:
+        print("[AG] telefondan erisilebilir bir adres bulunamadi "
+              "(kablosuz baglanti kapali olabilir)")
+
+
 # Uygulama boyunca tek kopya tutulan agir nesneler
 ocr_engine: OCREngine | None = None
 extractor = None
@@ -166,6 +201,8 @@ async def lifespan(app: FastAPI):
             print(f"[LLM] isitma tamam ({time.time() - t0:.1f} sn)")
         except Exception as e:
             print(f"[LLM] isitma atlandi -> {e}")
+
+    _yerel_adresleri_yaz(int(os.getenv("PORT", "8000")))
 
     yield
 
