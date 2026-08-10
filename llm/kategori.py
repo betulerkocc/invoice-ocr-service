@@ -23,12 +23,17 @@ KATEGORILER = [
     "Market",
     "Akaryakıt",
     "Yemek/Restoran",
+    "Giyim",
     "Kırtasiye/Ofis",
     "Konaklama",
     "Ulaşım",
     "Telekom/İnternet",
     "Fatura",
     "Sağlık",
+    "Eğlence",
+    "Banka/Finans",
+    "Kargo/Posta",
+    "Bağış/Aidat",
     "Diğer",
 ]
 
@@ -50,7 +55,9 @@ ANAHTAR_KELIMELER = {
         "restoran", "restaurant", "lokanta", "kahve dünyası", "kahve dunyasi",
         "starbucks", "kafe", "cafe", "pastane", "fırın", "firin", "pizza",
         "burger", "döner", "doner", "çay bahçesi", "kebap", "bistro",
-        "espresso", "latte",
+        "espresso", "latte", "büfe", "bufe", "bife", "coffee", "coffy",
+        "kahvaltı", "kahvalti", "tost", "sandviç", "sandvic", "çay ocağı",
+        "yemek", "mutfak", "sofra", "izgara", "balık evi",
     ],
     "Kırtasiye/Ofis": [
         "kırtasiye", "kirtasiye", "office", "ofis malzeme", "toner", "kartuş",
@@ -61,7 +68,7 @@ ANAHTAR_KELIMELER = {
     ],
     "Ulaşım": [
         "taksi", "uber", "bitaksi", "havaş", "havas", "otogar", "thy",
-        "türk hava yolları", "turk hava yollari", "pegasus", "bilet",
+        "türk hava yolları", "turk hava yollari", "pegasus",
         "otoyol", "hgs", "ogs", "köprü geçiş", "kopru gecis", "otopark",
     ],
     "Telekom/İnternet": [
@@ -72,6 +79,26 @@ ANAHTAR_KELIMELER = {
         "elektrik", "doğalgaz", "dogalgaz", "su ve kanalizasyon", "aski",
         "iski", "başkentgaz", "baskentgaz", "igdaş", "igdas", "enerjisa",
         "ayedaş", "ayedas", "bedaş", "bedas",
+    ],
+    "Giyim": [
+        "tekstil", "giyim", "konfeksiyon", "mango", "lc waikiki", "koton",
+        "defacto", "boyner", "ayakkabı", "ayakkabi", "deri", "moda",
+    ],
+    "Eğlence": [
+        "sinema", "cinemaximum", "cinema", "tiyatro", "konser", "müze",
+        "muze", "spor salonu", "fitness", "oyun",
+    ],
+    "Banka/Finans": [
+        "bankası", "bankasi", "bank a.ş", "bank a.s", "havale", "eft ücreti",
+        "eft ucreti", "hesap işletim", "hesap isletim", "komisyon bedeli",
+    ],
+    "Kargo/Posta": [
+        "kargo", "ptt", "yurtiçi kargo", "yurtici kargo", "aras kargo",
+        "mng kargo", "sürat kargo", "surat kargo",
+    ],
+    "Bağış/Aidat": [
+        "bağış", "bagis", "dernek", "vakıf", "vakif", "aidat",
+        "güçlendirme", "guclendirme", "yardımlaşma", "yardimlasma",
     ],
     "Sağlık": [
         "eczane", "hastane", "tıp merkezi", "tip merkezi", "poliklinik",

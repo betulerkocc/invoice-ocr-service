@@ -329,6 +329,29 @@ def disa_aktarim_satirlari(donem: str | None = None) -> list:
         return [dict(s) for s in satirlar]
 
 
+def bilinen_firmalar() -> list:
+    """
+    Dogrulanmis kayitlardan firma adi + adres ciftlerini dondurur.
+
+    Ayni firma birden fazla kez gectiginde en son dogrulanan kayit
+    kullaniliyor: adres degismisse guncel olani yeglenir.
+    """
+    with _baglan() as conn:
+        satirlar = conn.execute(
+            """SELECT company_name, address
+               FROM faturalar
+               WHERE dogrulandi = 1
+                 AND company_name IS NOT NULL AND TRIM(company_name) != ''
+               ORDER BY id"""
+        ).fetchall()
+
+    # Sozluk sonrakini uzerine yazdigi icin en son kayit kaliyor
+    firmalar = {}
+    for s in satirlar:
+        firmalar[s["company_name"].strip()] = (s["address"] or None)
+    return [{"ad": a, "adres": adr} for a, adr in firmalar.items()]
+
+
 def egitim_kayitlari() -> list:
     """
     Egitim verisi olarak kullanilabilecek kayitlari dondurur.

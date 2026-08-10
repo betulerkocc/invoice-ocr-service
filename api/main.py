@@ -43,6 +43,42 @@ from ocr_engine import OCREngine  # noqa: E402
 from prompt import empty_result  # noqa: E402
 
 
+def _bilinen_firmayla_tamamla(data: dict, raw_text: str) -> dict:
+    """
+    Daha once dogrulanmis bir firma bu fiste geciyorsa adini ve adresini kullanir.
+
+    Firma adi ve adres, modelin en cok zorlandigi iki alan: belgede bunlari
+    isaretleyen bir etiket yok, konumdan cikarim yapmak gerekiyor. Ama ayni
+    isletmeden birden fazla fis geliyor (market, kafe, akaryakit) ve kullanici
+    bir kez duzeltip onayladiysa o bilgi elimizde.
+
+    Guvenlik icin iki kosul: ad ham metinde GERCEKTEN geciyor olmali (aksi
+    halde alakasiz bir firmanin adini yapistirirdik) ve adres yalnizca model
+    bos biraktiginda dolduruluyor (sube adresleri farkli olabilir).
+
+    Bu, yeniden egitim beklemeden duzeltmelerin ise yaramasini sagliyor.
+    """
+    if not raw_text:
+        return data
+
+    from infer import _sadelestir
+
+    metin = _sadelestir(raw_text)
+    en_iyi = None
+    for firma in db.bilinen_firmalar():
+        sade = _sadelestir(firma["ad"])
+        # Cok kisa adlar rastgele eslesir ("AS", "LTD"); en az 8 karakter
+        if len(sade) >= 8 and sade in metin:
+            if en_iyi is None or len(sade) > len(_sadelestir(en_iyi["ad"])):
+                en_iyi = firma  # en uzun eslesme en belirleyici olan
+
+    if en_iyi:
+        data["company_name"] = en_iyi["ad"]
+        if not data.get("address") and en_iyi["adres"]:
+            data["address"] = en_iyi["adres"]
+    return data
+
+
 def _flag(name: str, default: str = "0") -> bool:
     return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
 
@@ -329,6 +365,13 @@ async def analyze_invoice(file: UploadFile = File(...)):
                 status_code=500,
                 content={"error": f"LLM hatasi: {e}", "raw_text": raw_text},
             )
+
+    # Dogrulanmis firma hafizasi: tekrar eden isletmelerde kullanicinin
+    # onayladigi ad/adres, modelin tahminine tercih ediliyor.
+    try:
+        data = _bilinen_firmayla_tamamla(data, raw_text)
+    except Exception as e:
+        print(f"[FIRMA] hafiza uygulanamadi -> {e}")
 
     meta = {
         "llm_used": extractor is not None,
