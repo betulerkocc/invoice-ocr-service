@@ -193,7 +193,7 @@ Hata alırsan Secret ya eklenmemiş ya notebook'a attach edilmemiş demektir —
 ## Hücre 7 — Servisi başlat
 
 ```python
-!python scripts/serve_kaggle.py
+!python scripts/serve_ngrok.py
 ```
 
 Bu hücre **bilerek durmaz** — çalıştığı sürece servis ayakta. Çıktıda şuna benzer
@@ -391,7 +391,7 @@ Servisi adaptörle çalıştırmak için `ADAPTER_PATH` ortam değişkenini ver:
 ```python
 import os
 os.environ['ADAPTER_PATH'] = 'models/qwen-invoice-lora'
-!ADAPTER_PATH=models/qwen-invoice-lora python scripts/serve_kaggle.py
+!ADAPTER_PATH=models/qwen-invoice-lora python scripts/serve_ngrok.py
 ```
 
 ## Repo private ise

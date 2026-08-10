@@ -1,10 +1,13 @@
 """
-Kaggle uzerinde FastAPI servisini ayaga kaldirir ve ngrok ile disariya acar.
+FastAPI servisini ayaga kaldirir ve ngrok ile disariya acar.
 
-Kaggle notebook'u disaridan gelen istekleri kabul etmez; servis 'localhost:8000'
-de calisir ama o localhost Kaggle sunucusunun icidir. ngrok, Kaggle'in icinden
-disariya bir tunel acar ve geciçi bir public URL verir. Deligi acan taraf Kaggle
-oldugu icin guvenlik duvari sorun cikarmaz.
+Yerelde neden gerekli: makinenin IP'si ag degistikce kayiyor (hotspot, ev
+wifi'si, kampus agi hepsi baska adres veriyor) ve bazi aglar cihazlar arasi
+iletisimi engelliyor. ngrok disariya bir tunel acip sabit bir https adresi
+veriyor - telefon hangi agda olursa olsun, mobil veride bile calisiyor.
+
+Kaggle'da neden gerekli: notebook disaridan gelen istekleri kabul etmiyor.
+Deligi acan taraf ic taraf oldugu icin guvenlik duvari sorun cikarmiyor.
 
 Gereken: ngrok authtoken (ucretsiz, https://dashboard.ngrok.com).
 Token asla koda yazilmaz; sirasiyla su iki yerden aranir:
@@ -12,8 +15,11 @@ Token asla koda yazilmaz; sirasiyla su iki yerden aranir:
     2. Ortam degiskeni -> NGROK_AUTHTOKEN
 
 Kullanim:
-    python scripts/serve_kaggle.py
-    python scripts/serve_kaggle.py --port 8000
+    python scripts/serve_ngrok.py
+    python scripts/serve_ngrok.py --port 8000
+
+Token: .env dosyasina NGROK_AUTHTOKEN=... satiri ekleyin
+       (Kaggle'da Add-ons -> Secrets uzerinden de okunuyor)
 
 Bu script bilerek bloklar: calistigi surece servis ayakta, durdurunca kapanir.
 """
@@ -24,6 +30,15 @@ import sys
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_BASE_DIR, "..", "api"))
+
+# .env'deki NGROK_AUTHTOKEN okunsun. Token koda yazilmiyor: repo paylasilirsa
+# birlikte gitmesin ve baskasi senin hesabin adina tunel acamasin.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(_BASE_DIR, "..", ".env"))
+except ImportError:
+    pass
 
 
 def _authtoken_bul() -> str:
@@ -50,18 +65,17 @@ def _authtoken_bul() -> str:
         neden = f"{type(e).__name__}: {e}"
 
     sys.exit(
-        f"HATA: ngrok authtoken bulunamadi. (Kaggle Secrets denemesi -> {neden})\n"
+        f"HATA: ngrok authtoken bulunamadi.  (denenen: ortam degiskeni, Kaggle Secrets -> {neden})\n"
         "\n"
-        "  Cozum 1 (onerilen) - notebook hucresinde token'i ortam degiskenine koyun:\n"
-        "      import os\n"
-        "      from kaggle_secrets import UserSecretsClient\n"
-        "      os.environ['NGROK_AUTHTOKEN'] = UserSecretsClient().get_secret('NGROK_AUTHTOKEN')\n"
+        "  Yerelde calisiyorsaniz:\n"
+        "    Proje kokundeki .env dosyasina su satiri ekleyin:\n"
+        "      NGROK_AUTHTOKEN=buraya_token\n"
         "\n"
-        "  Cozum 2 - Secret'i kontrol edin:\n"
-        "      Add-ons -> Secrets -> label tam olarak 'NGROK_AUTHTOKEN' olmali\n"
-        "      Eklemek yetmez, yanindaki kutuyu isaretleyip notebook'a attach edin\n"
+        "  Kaggle'da calisiyorsaniz:\n"
+        "    Add-ons -> Secrets -> 'NGROK_AUTHTOKEN' adiyla ekleyip notebook'a attach edin\n"
         "\n"
-        "  Token: https://dashboard.ngrok.com/get-started/your-authtoken"
+        "  Token: https://dashboard.ngrok.com/get-started/your-authtoken\n"
+        "  (.env dosyasi .gitignore'da; token repoya girmez)"
     )
 
 
