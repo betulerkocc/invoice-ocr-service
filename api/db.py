@@ -54,6 +54,12 @@ SONRADAN_EKLENEN_SUTUNLAR = [
     # KDV tutari. Modelden istenmiyor, kural katmani cikariyor
     # (fiste acik etiketi var). Belgede nasil yaziyorsa oyle saklaniyor.
     ("kdv", "TEXT"),
+    # Kullanici bu kaydi gozden gecirip onayladi mi.
+    #
+    # Egitim verisi olarak SADECE onaylanmis kayitlar kullanilacak. Onaysiz
+    # kayitlar modelin kendi tahmini; onlari egitime vermek modele kendi
+    # hatalarini dogru olarak ogretmek olurdu.
+    ("dogrulandi", "INTEGER DEFAULT 0"),
 ]
 
 _db_yolu = os.path.abspath(VARSAYILAN_YOL)
@@ -162,7 +168,7 @@ def kategori_guncelle(kayit_id: int, kategori: str | None) -> bool:
 # ve raw_text/olusturuldu gibi alanlarin ezilmesine yol acardi.
 DUZENLENEBILIR_ALANLAR = (
     "company_name", "date", "address", "total_amount", "invoice_no",
-    "kdv", "category",
+    "kdv", "category", "dogrulandi",
 )
 
 
@@ -178,8 +184,12 @@ def kaydi_guncelle(kayit_id: int, alanlar: dict) -> bool:
         for a, v in alanlar.items()
         if a in DUZENLENEBILIR_ALANLAR
     }
-    # Bos birakilan alan "deger yok" demek; bos metin yerine NULL saklaniyor
-    guncellenecek = {a: (v or None) for a, v in guncellenecek.items()}
+    # Bos birakilan METIN alani "deger yok" demek; bos metin yerine NULL
+    # saklaniyor. dogrulandi bir bayrak, 0 gecerli bir deger - disarida.
+    guncellenecek = {
+        a: (int(bool(v)) if a == "dogrulandi" else (v or None))
+        for a, v in guncellenecek.items()
+    }
     if not guncellenecek:
         return False
 
@@ -248,7 +258,7 @@ def listele(limit: int = 50, offset: int = 0, donem: str | None = None) -> list:
     with _baglan() as conn:
         satirlar = conn.execute(
             """SELECT id, olusturuldu, dosya_adi, company_name, date, date_iso,
-                      address, total_amount, kdv, invoice_no, category,
+                      address, total_amount, kdv, invoice_no, category, dogrulandi,
                       ocr_saniye, llm_saniye
                FROM faturalar""" + kosul +
             " ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -315,6 +325,25 @@ def disa_aktarim_satirlari(donem: str | None = None) -> list:
                       kdv, category, address, olusturuldu
                FROM faturalar""" + kosul + " ORDER BY COALESCE(date_iso, olusturuldu), id",
             parametreler,
+        ).fetchall()
+        return [dict(s) for s in satirlar]
+
+
+def egitim_kayitlari() -> list:
+    """
+    Egitim verisi olarak kullanilabilecek kayitlari dondurur.
+
+    Kosullar:
+      - dogrulandi = 1  (kullanici gozden gecirdi)
+      - raw_text dolu   (OCR metni olmadan egitim ornegi kurulamaz)
+    """
+    with _baglan() as conn:
+        satirlar = conn.execute(
+            """SELECT id, raw_text, company_name, date, address, total_amount,
+                      invoice_no, kdv, category
+               FROM faturalar
+               WHERE dogrulandi = 1 AND raw_text IS NOT NULL AND TRIM(raw_text) != ''
+               ORDER BY id"""
         ).fetchall()
         return [dict(s) for s in satirlar]
 

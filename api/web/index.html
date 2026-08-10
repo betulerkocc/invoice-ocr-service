@@ -239,6 +239,14 @@
   .kat-satir .tut { flex:0 0 auto; font-size:13px; font-weight:600; white-space:nowrap; }
   .kat-satir .adet { flex:0 0 auto; font-size:11.5px; color:var(--sonuk); min-width:34px; text-align:right; }
 
+  button.dogrula {
+    width:100%; padding:11px; margin-top:12px; border:1px solid var(--iyi);
+    background:transparent; color:var(--iyi); border-radius:11px;
+    font:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+  }
+  button.dogrula.onayli { background:var(--iyi-bg); border-color:transparent; }
+  .kayit .onay { flex:0 0 auto; color:var(--iyi); font-size:12px; }
+
   .butonlar { display:flex; gap:8px; margin-top:14px; }
   .butonlar button {
     flex:1; padding:9.5px; border:1px solid var(--cizgi-koyu); background:transparent;
@@ -307,7 +315,7 @@
 
 <main>
   <div class="sekmeler">
-    <button id="sekmeYeni" class="aktif" onclick="sekmeyeGec('yeni')">Yeni Fatura</button>
+    <button id="sekmeYeni" class="aktif" onclick="sekmeyeGec('yeni')">Yeni Fiş</button>
     <button id="sekmeKayit" onclick="sekmeyeGec('kayit')">Kayıtlar</button>
   </div>
 
@@ -372,6 +380,7 @@
         <span class="et">Toplam</span><input class="dg-giris sayi-hiza" id="tutarDeger" data-alan="total_amount" placeholder="—" onchange="alaniKaydet(this)">
       </div>
       <div id="sonucAlanlar"></div>
+      <button class="dogrula" id="dogrulaBtn" onclick="dogrula()">Kontrol ettim, doğrula</button>
       <div class="butonlar">
         <button onclick="jsonKopyala()" id="kopyalaBtn">JSON kopyala</button>
         <button onclick="sekmeyeGec('kayit')">Kayıtlar</button>
@@ -631,6 +640,7 @@ function sonucuGoster(s) {
   }).join("");
 
   katSecimiDoldur(s.category, s.id);
+  dogrulamaDurumu(s.dogrulandi);
 
   const m = s.meta || {}, p = [];
   if (m.ocr_seconds != null) p.push("OCR " + m.ocr_seconds + " sn");
@@ -683,6 +693,7 @@ async function kayitlariYukle() {
                '<div class="orta"><div class="firma">' + kacisli(firma) + "</div>" +
                '<div class="alt">' + (k.category ? kacisli(k.category) + " · " : "") +
                kacisli(k.date || "tarihsiz") + " · #" + k.id + "</div></div>" +
+               (k.dogrulandi ? '<span class="onay">✓</span>' : "") +
                '<div class="tutar sayi-hiza">' + kacisli(k.total_amount || "—") + "</div>" +
                '<button class="sil" onclick="kaydiSil(event,' + k.id + ')" title="Sil">×</button>' +
                "</div>";
@@ -715,6 +726,31 @@ function katSecimiDoldur(secili, kayitId) {
       '<option selected>' + kacisli(secili) + "</option>");
   }
   sec.classList.remove("gizli");
+}
+
+async function dogrula() {
+  if (!acikKayitId) return;
+  const btn = document.getElementById("dogrulaBtn");
+  const suanOnayli = btn.classList.contains("onayli");
+  try {
+    const c = await fetch("/faturalar/" + acikKayitId + "/dogrula", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dogrulandi: !suanOnayli }),
+    });
+    if (!c.ok) throw new Error("HTTP " + c.status);
+    dogrulamaDurumu(!suanOnayli);
+    kayitlariYukle();
+  } catch (e) {
+    hatayiGoster("Doğrulanamadı: " + e.message);
+  }
+}
+
+function dogrulamaDurumu(onayli) {
+  const btn = document.getElementById("dogrulaBtn");
+  btn.classList.toggle("onayli", !!onayli);
+  btn.textContent = onayli ? "✓ Doğrulandı — eğitim verisine dahil"
+                           : "Kontrol ettim, doğrula";
 }
 
 async function alaniKaydet(girdi) {
@@ -813,6 +849,7 @@ async function kaydiAc(id) {
   sonucuGoster({
     id: k.id,
     category: k.category,
+    dogrulandi: k.dogrulandi,
     data: { company_name:k.company_name, date:k.date, address:k.address,
             total_amount:k.total_amount, invoice_no:k.invoice_no, kdv:k.kdv },
     raw_text: k.raw_text,

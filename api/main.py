@@ -248,6 +248,20 @@ def kaydi_duzelt(kayit_id: int, alanlar: dict = Body(...)):
     return db.getir(kayit_id)
 
 
+@app.post("/faturalar/{kayit_id}/dogrula")
+def kaydi_dogrula(kayit_id: int, dogrulandi: bool = Body(True, embed=True)):
+    """
+    Kaydi 'gozden gecirildi' olarak isaretler.
+
+    Egitim verisi yalnizca isaretli kayitlardan uretiliyor. Isaretsiz kayit
+    modelin kendi tahmini; onu egitime vermek modele kendi hatalarini dogru
+    olarak ogretmek olurdu.
+    """
+    if not db.kaydi_guncelle(kayit_id, {"dogrulandi": dogrulandi}):
+        raise HTTPException(status_code=404, detail="Kayit bulunamadi")
+    return db.getir(kayit_id)
+
+
 @app.patch("/faturalar/{kayit_id}/kategori")
 def kategori_degistir(kayit_id: int, kategori: str = Body(..., embed=True)):
     """
