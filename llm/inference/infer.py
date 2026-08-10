@@ -143,6 +143,44 @@ def _sadelestir(s: str) -> str:
     return re.sub(r"[^0-9a-zçğıöşü]", "", s.lower())
 
 
+def _asciye_indir(s: str) -> str:
+    """Turkce harfleri ASCII karsiliklarina cevirir (karsilastirma icin)."""
+    esleme = str.maketrans("çğıöşüâîû", "cgiosuaiu")
+    return s.translate(esleme)
+
+
+def _metinde_benziyor_mu(deger: str, metin: str, esik: float = 0.82) -> bool:
+    """
+    Degerin ham metinde YETERINCE benzer bir karsiligi var mi.
+
+    Birebir arama yetmiyor: OCR Turkce karakterleri sistematik olarak yanlis
+    okuyor ("CANBERK BUFE" -> "CANBERK BIFE") ve kullanici duzeltilmis halini
+    giriyor. Birebir arayan bir filtre bu dogru duzeltmeleri de siliyordu.
+
+    Yine de tamamen serbest birakmiyoruz: model metinle hicbir ilgisi olmayan
+    seyler uydurabiliyor (olculen bir ornekte "Kartiki, Sanliurfa"). Benzerlik
+    esigi ikisini ayirmaya yariyor.
+    """
+    from difflib import SequenceMatcher
+
+    d = _asciye_indir(_sadelestir(deger))
+    m = _asciye_indir(_sadelestir(metin))
+    if not d or not m:
+        return False
+    if d in m:
+        return True
+
+    # Metni degerin uzunlugunda pencerelere bolup en iyi ortusmeyi ariyoruz.
+    # Adim yarim pencere: kaydirma sinirinda kalan eslesmeler kacmasin.
+    n = len(d)
+    adim = max(1, n // 2)
+    for bas in range(0, max(1, len(m) - n + 1), adim):
+        pencere = m[bas : bas + n]
+        if SequenceMatcher(None, d, pencere).ratio() >= esik:
+            return True
+    return False
+
+
 def _uydurmalari_ele(sonuc: dict, raw_text: str) -> dict:
     """
     Ham metinde gecmeyen degerleri None yapar.
@@ -159,11 +197,16 @@ def _uydurmalari_ele(sonuc: dict, raw_text: str) -> dict:
     if not raw_text:
         return sonuc
 
-    metin = _sadelestir(raw_text)
     for alan in DOGRULANAN_ALANLAR:
         deger = sonuc.get(alan)
         if isinstance(deger, str) and deger.strip():
-            if _sadelestir(deger) not in metin:
+            # Tutar ve belge no birebir aranir: onlarda "benzer" olmak
+            # yetmez, 82,55 ile 82,56 farkli seylerdir.
+            if alan in ("total_amount", "invoice_no"):
+                gecerli = _sadelestir(deger) in _sadelestir(raw_text)
+            else:
+                gecerli = _metinde_benziyor_mu(deger, raw_text)
+            if not gecerli:
                 sonuc[alan] = None
     return sonuc
 
