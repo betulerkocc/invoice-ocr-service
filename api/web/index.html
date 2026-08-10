@@ -844,7 +844,16 @@ async function kaydiAc(id) {
   if (!c.ok) return;
   const k = await c.json();
   sekmeyeGec("yeni");
-  document.getElementById("onizlemeSarmal").style.display = "none";
+
+  // Kaynak gorseli goster: duzeltme yaparken ham metne degil fisin kendisine
+  // bakmak cok daha hizli.
+  const sarmal = document.getElementById("onizlemeSarmal");
+  if (k.gorsel) {
+    document.getElementById("onizleme").src = "/faturalar/" + k.id + "/gorsel";
+    sarmal.style.display = "block";
+  } else {
+    sarmal.style.display = "none";
+  }
   document.getElementById("ilerleme").classList.add("gizli");
   sonucuGoster({
     id: k.id,

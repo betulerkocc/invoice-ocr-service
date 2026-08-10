@@ -34,6 +34,7 @@ sys.path.append(os.path.join(_BASE_DIR, "..", "llm", "inference"))
 import db  # noqa: E402
 
 WEB_DIZINI = os.path.join(_BASE_DIR, "web")
+GORSEL_DIZINI = os.path.join(_BASE_DIR, "..", "data", "gorseller")
 
 # .env, ocr_engine import edilmeden ONCE okunmali: paddlex cache yolunu
 # (PADDLE_PDX_CACHE_HOME) import aninda bir kere okuyup sabitliyor.
@@ -328,6 +329,18 @@ def fatura_getir(kayit_id: int):
     return kayit
 
 
+@app.get("/faturalar/{kayit_id}/gorsel")
+def fatura_gorseli(kayit_id: int):
+    """Kaydin kaynak gorselini dondurur."""
+    kayit = db.getir(kayit_id)
+    if not kayit or not kayit.get("gorsel"):
+        raise HTTPException(status_code=404, detail="Gorsel yok")
+    yol = os.path.join(GORSEL_DIZINI, kayit["gorsel"])
+    if not os.path.exists(yol):
+        raise HTTPException(status_code=404, detail="Gorsel dosyasi bulunamadi")
+    return FileResponse(yol)
+
+
 @app.delete("/faturalar/{kayit_id}")
 def fatura_sil(kayit_id: int):
     if not db.sil(kayit_id):
@@ -347,9 +360,8 @@ async def analyze_invoice(file: UploadFile = File(...)):
         raw_text = ocr_engine.extract_text(tmp_path)
         ocr_sure = time.time() - t0
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"OCR hatasi: {e}"})
-    finally:
         os.remove(tmp_path)
+        return JSONResponse(status_code=500, content={"error": f"OCR hatasi: {e}"})
 
     llm_sure = None
     if extractor is None:
@@ -361,6 +373,7 @@ async def analyze_invoice(file: UploadFile = File(...)):
             data = extractor.extract(raw_text)
             llm_sure = time.time() - t0
         except Exception as e:
+            os.remove(tmp_path)
             return JSONResponse(
                 status_code=500,
                 content={"error": f"LLM hatasi: {e}", "raw_text": raw_text},
@@ -401,11 +414,29 @@ async def analyze_invoice(file: UploadFile = File(...)):
         kayit_hatasi = f"{type(e).__name__}: {e}"
         print(f"[DB] kaydedilemedi -> {kayit_hatasi}")
 
+    # Gorseli sakla. Egitim icin gerekmiyor (model metinle calisiyor) ama
+    # kaydi sonradan gozle dogrulamayi ve ileride daha iyi bir OCR ciktiginda
+    # yeniden okutmayi mumkun kiliyor.
+    gorsel_adi = None
+    if kayit_id:
+        try:
+            os.makedirs(GORSEL_DIZINI, exist_ok=True)
+            gorsel_adi = f"{kayit_id}{suffix or '.jpg'}"
+            shutil.move(tmp_path, os.path.join(GORSEL_DIZINI, gorsel_adi))
+            db.gorsel_ayarla(kayit_id, gorsel_adi)
+        except Exception as e:
+            gorsel_adi = None
+            print(f"[GORSEL] saklanamadi -> {e}")
+
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
+
     return {
         "id": kayit_id,
         "filename": file.filename,
         "data": data,
         "category": kategori,
+        "gorsel": gorsel_adi,
         "raw_text": raw_text,  # Hata ayiklama icin: LLM mi yanlis anladi, OCR mi kotu okudu?
         "meta": {**meta, "kayit_hatasi": kayit_hatasi},
     }

@@ -60,6 +60,12 @@ SONRADAN_EKLENEN_SUTUNLAR = [
     # kayitlar modelin kendi tahmini; onlari egitime vermek modele kendi
     # hatalarini dogru olarak ogretmek olurdu.
     ("dogrulandi", "INTEGER DEFAULT 0"),
+    # Kaydedilen gorselin dosya adi (data/gorseller/ altinda).
+    #
+    # Gorsel veritabanina degil diske yaziliyor: SQLite'a binary gomus olsak
+    # dosya sisiyor, yedeklemesi ve tasinmasi zorlasiyordu. Burada yalnizca
+    # ad tutuluyor.
+    ("gorsel", "TEXT"),
 ]
 
 _db_yolu = os.path.abspath(VARSAYILAN_YOL)
@@ -258,7 +264,7 @@ def listele(limit: int = 50, offset: int = 0, donem: str | None = None) -> list:
     with _baglan() as conn:
         satirlar = conn.execute(
             """SELECT id, olusturuldu, dosya_adi, company_name, date, date_iso,
-                      address, total_amount, kdv, invoice_no, category, dogrulandi,
+                      address, total_amount, kdv, invoice_no, category, dogrulandi, gorsel,
                       ocr_saniye, llm_saniye
                FROM faturalar""" + kosul +
             " ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -327,6 +333,14 @@ def disa_aktarim_satirlari(donem: str | None = None) -> list:
             parametreler,
         ).fetchall()
         return [dict(s) for s in satirlar]
+
+
+def gorsel_ayarla(kayit_id: int, dosya_adi: str) -> bool:
+    """Kaydin gorsel dosya adini yazar."""
+    with _baglan() as conn:
+        return conn.execute(
+            "UPDATE faturalar SET gorsel = ? WHERE id = ?", (dosya_adi, kayit_id)
+        ).rowcount > 0
 
 
 def bilinen_firmalar() -> list:
