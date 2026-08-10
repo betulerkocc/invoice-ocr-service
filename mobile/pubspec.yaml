@@ -1,0 +1,31 @@
+name: fatura_ocr
+description: Fatura ve fiş görsellerini yapılandırılmış veriye çeviren mobil istemci.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Sunucuyla iletisim. Tek bir REST API'ye baglaniyoruz, dio gibi agir bir
+  # istemciye gerek yok.
+  http: ^1.2.0
+
+  # Kamera ve galeri erisimi. Kendi kamera ekranimizi yazmak yerine sistemin
+  # kamerasini kullaniyoruz: kullanici zaten alisik ve odaklama/pozlama
+  # islerini isletim sistemi bizden iyi yapiyor.
+  image_picker: ^1.0.7
+
+  # Sunucu adresi cihazda kalsin: her acilista yeniden yazmak gerekmesin.
+  shared_preferences: ^2.2.2
+
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
