@@ -211,8 +211,12 @@ alınabilir — yerelde çalışırken gerekmez, `http://127.0.0.1:8000/docs` ye
 - [x] SROIE v2 veri hazırlama (`llm/finetune/prepare_sroie.py`) — 626 + 347 örnek
 - [x] QLoRA fine-tune scripti (`llm/finetune/train.py`)
 - [x] Değerlendirme scripti (`scripts/evaluate.py`)
-- [ ] Eğitimi çalıştır ve öncesi/sonrası tabloyu al
-- [ ] Fine-tuned adaptörü servise takma
+- [x] Eğitimi çalıştır ve öncesi/sonrası tabloyu al — [docs/sonuclar.md](docs/sonuclar.md)
+- [x] Fine-tuned adaptörü servise takma
+- [x] SQLite kaydı, kategorizasyon, CSV dışa aktarım
+- [x] Mobil web arayüzü (düzeltme + doğrulama + toplu yükleme)
+- [x] Türkçe fişlerle ek eğitim — Türkçe %54 → %68, SROIE %87.5 → %89.5
+- [x] Flutter mobil uygulaması (kaynak hazır, derlenmedi)
 
 > ngrok adımı bilerek fine-tune'dan **önce** yapıldı: gerçek bir fatura
 > fotoğrafında OCR çıktısının ne kadar dağınık geldiğini görmeden fine-tune
