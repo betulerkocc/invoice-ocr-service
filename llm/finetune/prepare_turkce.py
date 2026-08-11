@@ -135,6 +135,9 @@ def main():
     p.add_argument("--test-out", default="data/turkce_test.jsonl")
     p.add_argument("--test-adet", type=int, default=10,
                    help="Kac gercek fis test icin ayrilsin (egitime girmez)")
+    p.add_argument("--yeni-test", action="store_true",
+                   help="Var olan test setini koruma, yeniden sec. DIKKAT: onceki "
+                        "olcumlerle karsilastirilabilirlik kaybolur")
     p.add_argument("--cogulla", type=int, default=4,
                    help="Gercek Turkce ornekler kac kez tekrarlansin")
     p.add_argument("--karistir", default=None,
@@ -159,20 +162,40 @@ def main():
 
     # Test seti EGITIMDEN once ayriliyor. Ayni fisleri hem egitip hem olcersek
     # model onlari ezberler ve olcum bir sey kanitlamaz.
+    #
+    # Var olan test dosyasi KORUNUYOR. Yeni fisler eklendikce rastgele secim
+    # baska fisleri secerdi; o zaman "onceki model %54, yenisi %68" gibi bir
+    # karsilastirma anlamsizlasir cunku iki olcum farkli sinavlardan geliyor
+    # olurdu. Ayrica dun test olan bir fis bugun egitime girer ve sonraki
+    # olcum sisirilir.
     rnd = random.Random(args.tohum)
-    karisik = gercek[:]
-    rnd.shuffle(karisik)
-    test = karisik[: args.test_adet]
-    egitim_gercek = karisik[args.test_adet:]
 
-    print(f"  test icin ayrilan : {len(test)}")
+    onceki_test = {}
+    if os.path.exists(args.test_out) and not args.yeni_test:
+        for o in jsonl_oku(args.test_out):
+            onceki_test[o["raw_text"].strip()] = o
+
+    if onceki_test:
+        test = [o for o in gercek if o["raw_text"].strip() in onceki_test]
+        egitim_gercek = [o for o in gercek if o["raw_text"].strip() not in onceki_test]
+        print(f"  test seti korundu : {len(test)} fis ({args.test_out})")
+        if len(test) < len(onceki_test):
+            print(f"  UYARI: onceki testteki {len(onceki_test) - len(test)} fis "
+                  "artik veritabaninda yok (silinmis olabilir)")
+    else:
+        karisik = gercek[:]
+        rnd.shuffle(karisik)
+        test = karisik[: args.test_adet]
+        egitim_gercek = karisik[args.test_adet:]
+        print(f"  test icin ayrilan : {len(test)}  (yeni secim)")
+
+        os.makedirs(os.path.dirname(args.test_out) or ".", exist_ok=True)
+        with open(args.test_out, "w", encoding="utf-8") as f:
+            for o in test:
+                f.write(json.dumps(o, ensure_ascii=False) + "\n")
+        print(f"  -> {args.test_out}")
+
     print(f"  egitimde kalan    : {len(egitim_gercek)}")
-
-    os.makedirs(os.path.dirname(args.test_out) or ".", exist_ok=True)
-    with open(args.test_out, "w", encoding="utf-8") as f:
-        for o in test:
-            f.write(json.dumps(o, ensure_ascii=False) + "\n")
-    print(f"  -> {args.test_out}")
 
     # Cogullama: 29 gercek ornek 626 SROIE'nin yaninda %4'te kalir ve model
     # onlari fark etmez. Tekrarlamak agirligini artiriyor. Riski ezberleme,

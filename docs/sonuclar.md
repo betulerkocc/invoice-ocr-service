@@ -58,20 +58,73 @@ Alan uyarlamasında bir dili kazanırken ötekini kaybetmek olağandır. Burada
 ikisi de kazandı: SROIE karışımda tutuldu ve sentetik veri "etiketli alanı
 bul, birebir kopyala" disiplinini genel olarak pekiştirdi.
 
-## 3. Eğitim ayrıntıları
+## 3. Veriyi ikiye katlamak ne getirdi — hiçbir şey
 
-| | SROIE fine-tune | Türkçe ek eğitim |
+Doğrulanmış gerçek fiş sayısı 39'dan 78'e çıkarıldı (eğitimde kullanılan
+29 → 68) ve model yeniden eğitildi. Test seti **değiştirilmedi**: aynı 10 fiş,
+aynı sınav.
+
+| | 29 gerçek örnek | 68 gerçek örnek |
 |---|---|---|
-| Örnek | 626 | 992 |
-| Epoch | 3 | 3 |
-| Donanım | Tesla T4 (Kaggle) | RTX 4060 (yerel) |
-| Süre | 11 dk 24 sn | 17 dk 23 sn |
-| Kayıp | 0.126 → 0.013 | 0.082 → 0.010 |
+| Türkçe test (10 örnek) | 68.0% | 64.0% |
+| SROIE (150 örnek) | **89.5%** | **89.3%** |
+| SROIE tam eşleşme | 57.3% | 57.3% |
+
+Türkçe testteki 4 puanlık fark bu örneklem büyüklüğünde gürültüdür — 10 örnekte
+bir fiş 10 puan eder. Güvenilir ölçüm olan SROIE'de fark 0.2 puan, yani **yok**.
+
+**Sonuç: daha fazla aynı türden veri artık iyileşme getirmiyor.** İlk 29 örneğin
+sağladığı sıçrama (%54 → %68) tekrarlanmadı.
+
+### Neden
+
+Eğitim verisindeki alan doluluğu darboğazı gösteriyor:
+
+| Alan | Ham metinden türetilebilen |
+|---|---|
+| `date` | 100% |
+| `total_amount` | 94% |
+| `invoice_no` | 77% |
+| `company_name` | 68% |
+| `address` | 56% |
+
+Adres ve firma adının yarısı, **OCR o satırları hiç okumadığı için** boş.
+Modele "bu fişte adres yok" öğretiliyor, çünkü girdisinde gerçekten yok.
+Fiş sayısını artırmak bu oranı değiştirmiyor.
+
+Darboğaz veri miktarı değil, **OCR'ın kaynak belgeden çıkarabildiği bilgi**.
+Etkili sonraki adımlar: fişin üst kısmını kadraja alan çekim, OCR tarafında
+başlık bölgesi iyileştirmesi, ya da daha büyük bir base model (1.5B).
+
+### Bu ölçüm neden mümkün oldu
+
+Test seti dosyaya sabitlendi ve yeni fişler eklendikçe **değiştirilmedi**.
+Sabitlenmeseydi her çalıştırmada farklı 10 fiş seçilir, çıkan sayı önceki
+ölçümle karşılaştırılamaz olurdu; üstelik dün test olan bir fiş bugün eğitime
+girip sonraki ölçümü şişirirdi.
+
+Servis ölçülmüş model olan `qwen-invoice-tr` ile çalışmaya devam ediyor.
+`qwen-invoice-tr2` bu bulgunun kanıtı olarak saklanıyor.
+
+## 4. Eğitim ayrıntıları
+
+| | SROIE fine-tune | Türkçe (29 gerçek) | Türkçe (68 gerçek) |
+|---|---|---|---|
+| Örnek | 626 | 992 | 1148 |
+| Epoch | 3 | 3 | 3 |
+| Donanım | Tesla T4 (Kaggle) | RTX 4060 | RTX 4060 |
+| Quantization | 4-bit NF4 | 4-bit NF4 | yok (16-bit) |
+| Süre | 11 dk 24 sn | 17 dk 23 sn | 31 dk 13 sn |
+| Kayıp | 0.126 → 0.013 | 0.082 → 0.010 | 0.082 → 0.011 |
+
+> Üçüncü eğitim 16-bit yapıldı: `bitsandbytes` yerelde kurulu değildi ve
+> 0.5B'lik model 8 GB'a quantization olmadan da sığıyor. 4-bit'in amacı
+> belleği kısmaktı; yerelde böyle bir kısıt yok.
 
 Ortak: Qwen2.5-0.5B-Instruct, LoRA r=16 / alpha=32, 7 hedef katman
 (dikkat + MLP), eğitilen parametre 8.798.208 (%1.75).
 
-## 4. Hız
+## 5. Hız
 
 | | Başlangıç | Şimdi |
 |---|---|---|
@@ -81,7 +134,7 @@ Ortak: Qwen2.5-0.5B-Instruct, LoRA r=16 / alpha=32, 7 hedef katman
 OCR'da medium → mobile model geçişi ve görsel küçültme; LLM'de float16 ve
 LoRA adaptörünün base modele kaynaştırılması.
 
-## 5. Ölçüm yöntemi
+## 6. Ölçüm yöntemi
 
 Alan alan tam eşleşme. Karşılaştırmada büyük/küçük harf ve fazla boşluk
 normalize ediliyor, tutar sayıya indirgeniyor (`9.00` ile `9.0` aynı sayılır).
@@ -91,7 +144,7 @@ Aksi halde biçim farkları gerçek hata gibi görünürdü.
 farkı ayrıca raporlanıyor — base modelin `""` dönmesi fine-tune'un düzeltmesi
 gereken davranışlardan biriydi.
 
-## 6. Bilinen sınırlar
+## 7. Bilinen sınırlar
 
 **Türkçe test seti 10 örnek.** Bir fişlik değişim %10 oynatıyor. Yön güvenilir,
 kesin değer değil. Daha çok doğrulanmış fiş biriktikçe ölçüm netleşir.
