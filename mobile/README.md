@@ -12,10 +12,21 @@ birinde düzelen hatanın ötekinde de düzelmesi demek.
 | **Kayıtlar** | Dönem filtresi, kategori dökümü, kayıt açma/düzeltme/silme |
 | **Ayarlar** | Sunucu adresi, bağlantı testi |
 
+## Durum
+
+Kod `flutter analyze` denetiminden temiz geçiyor (`No issues found!`).
+Paketler kurulu. Android SDK olmadığı için **APK henüz üretilmedi** — o adım
+Android Studio gerektiriyor.
+
 ## Kurulum
 
 Flutter SDK ve Android toolchain gerekiyor. **İndirme boyutu 6-10 GB** —
 mobil veri üzerinden yapmayın.
+
+> **Ağ engelleri.** Bazı kurumsal ağlar paket depolarını engelliyor.
+> Bu projede ölçülen: `storage.googleapis.com` (Flutter SDK) izinli,
+> ama `pub.dev`, `pypi.org` ve `github.com` engelli. SDK'yı kurumsal ağdan
+> indirip paketleri (birkaç MB) başka bir bağlantıdan çekmek işe yarıyor.
 
 1. [Flutter SDK](https://docs.flutter.dev/get-started/install/windows) kurun
 2. [Android Studio](https://developer.android.com/studio) kurun (Android SDK
